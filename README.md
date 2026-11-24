@@ -13,7 +13,7 @@ python3 -m pip install -e ".[dev]"
 ruff check . && mypy app.py itau.py tests && pytest
 ```
 
-CI ejecuta lo mismo en cada push y pull request. Las reglas para agentes de código están en `AGENTS.md`.
+CI ejecuta lo mismo en cada push y pull request. Para proponer cambios, lee `CONTRIBUTING.md`; las reglas para agentes de código están en `AGENTS.md`.
 
 ## Demo local
 
