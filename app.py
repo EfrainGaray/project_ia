@@ -85,13 +85,21 @@ def offer_from_db(database, reference):
     return f"{row['cargo']}\n{row['empresa']}\n{row['enlace']}\n\n{row['descripcion']}\n"
 
 
+def evidence_for_version(rows, version):
+    """Devuelve los requisitos respaldados que puntúan y los que quedan fuera del CV."""
+    included: list[dict] = []
+    omitted: list[dict] = []
+    for row in rows:
+        if row["estado"] == "respaldado":
+            group = included if row["evidencia"] in version["evidencias"] else omitted
+            group.append(row)
+    return included, omitted
+
+
 def recommend(rows, versions):
     scores = {}
     for name, version in versions.items():
-        matches = [
-            row for row in rows
-            if row["estado"] == "respaldado" and row["evidencia"] in version["evidencias"]
-        ]
+        matches, _ = evidence_for_version(rows, version)
         scores[name] = sum(2 if row["tipo"] == "obligatorio" else 1 for row in matches)
     highest = max(scores.values(), default=0)
     leaders = [name for name, score in scores.items() if score == highest]
@@ -170,6 +178,12 @@ def main():
         print(f"\nCV recomendado: {recommendation or 'sin preferencia clara'}")
         for name, version in versions.items():
             print(f"  {name} ({scores[name]} puntos) · {args.perfil.parent / version['pdf']}")
+            included, omitted = evidence_for_version(rows, version)
+            for row in included:
+                points = 2 if row["tipo"] == "obligatorio" else 1
+                print(f"    +{points} · {row['cita']}")
+            for row in omitted:
+                print(f"    Evidencia fuera de este CV · {row['cita']}")
         if args.elegir:
             if args.elegir not in versions:
                 raise ValueError("Selecciona una de las versiones mostradas.")
