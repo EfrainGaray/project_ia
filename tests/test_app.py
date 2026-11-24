@@ -118,6 +118,11 @@ def test_complete_offer_from_db_reaches_recommendation_and_records_choice(tmp_pa
     out = capsys.readouterr().out
     assert "Análisis: reglas" in out and "CV recomendado: automatizacion" in out
     assert "Aviso: Experiencia en desarrollo e implementación de pipelines ETL/ELT" in out
+    _, versions = out.split("CV recomendado: automatizacion", 1)
+    other_versions, automation = versions.split("automatizacion (2 puntos)", 1)
+    assert "Evidencia fuera de este CV · Experiencia en desarrollo" in other_versions
+    assert "+2 · Experiencia en desarrollo e implementación de pipelines ETL/ELT" in automation
+    assert "Dominio avanzado" not in versions
     with sqlite3.connect(db) as conn:
         query = "SELECT cv_recomendado, cv_elegido, length(sha256) FROM decisiones"
         decision = conn.execute(query).fetchone()

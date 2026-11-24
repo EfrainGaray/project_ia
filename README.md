@@ -34,6 +34,15 @@ cada CV que contiene la evidencia. Los otros requisitos respaldados aportan
 un punto. Si ningún CV obtiene puntos o hay empate arriba, se pide elegir sin
 recomendación.
 
+### Evidencia por versión de CV
+
+La salida muestra las citas que aportan puntos a cada versión y las citas
+respaldadas por el perfil cuya evidencia queda fuera de esa versión. Los
+requisitos por confirmar se muestran en el análisis general y quedan fuera
+del puntaje. El mapa de evidencias de cada versión se mantiene en el JSON y
+debe reflejar el contenido de su PDF. La demo de Bci permite comprobarlo con
+el requisito de ETL del cargo Especialista Procesos y Proyectos Tarjeta.
+
 ## Análisis con IA
 
 Configura `OPENAI_API_KEY` en tu entorno local y ejecuta
