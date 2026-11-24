@@ -291,3 +291,24 @@ def test_extension_does_not_obey_a_service_without_the_token(env):
     rogue_server.close()
     env["server"].connected.clear()
     env["call"](env["server"].wait_connected(20))
+
+
+def test_hidden_and_password_values_are_never_read(env):
+    command(env, "open", {"url": env["base"] + "/practica/formulario.html", "hosts": ["127.0.0.1"]})
+    fields = {
+        "csrf": {"selector": "input[name=csrf]", "attr": "value"},
+        "clave": {"selector": "#clave", "attr": "value"},
+    }
+    assert command(env, "read", {"fields": fields}) == {"csrf": None, "clave": None}
+    command(env, "release")
+
+
+def test_extension_refuses_commands_once_the_tab_leaves_the_recipe_hosts(env):
+    command(env, "open", {"url": env["base"] + "/practica/formulario.html", "hosts": ["127.0.0.1"]})
+    page = driven_page(env)
+    page.evaluate("location.href = location.href.replace('127.0.0.1', 'localhost')")
+    page.wait_for_url("**localhost**")
+    with pytest.raises(BrowserError, match="fuera de los dominios"):
+        command(env, "read", {"fields": {"t": "h1"}})
+    command(env, "open", {"url": env["base"] + "/practica/formulario.html", "hosts": ["127.0.0.1"]})
+    command(env, "release")

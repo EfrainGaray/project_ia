@@ -4,6 +4,7 @@ const BADGE = "AUTO";
 let ws = null;
 let trusted = false;
 let drivenTab = null;
+let allowedHosts = [];
 
 const encoder = new TextEncoder();
 
@@ -22,10 +23,20 @@ function randomHex(bytes) {
   return [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+let connecting = false;
+
 async function connect() {
-  if (ws) return;
-  const { port, token } = await settings();
-  if (!token) return;
+  // Guard synchronously: concurrent calls (alarm, startup, settings change) must not open two sockets.
+  if (ws || connecting) return;
+  connecting = true;
+  let port;
+  let token;
+  try {
+    ({ port, token } = await settings());
+  } finally {
+    connecting = false;
+  }
+  if (!token || ws) return;
   const socket = new WebSocket(`ws://127.0.0.1:${port}/`);
   ws = socket;
   trusted = false;
@@ -107,6 +118,10 @@ async function currentTab() {
 
 async function run(func, ...args) {
   const tab = await currentTab();
+  // The page may have navigated by itself (redirect, link): never act outside the recipe hosts.
+  if (!allowedHosts.includes(new URL(tab.url).hostname)) {
+    throw new Error(`${tab.url} está fuera de los dominios de la receta`);
+  }
   const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func, args });
   const result = injection ? injection.result : undefined;
   if (result && typeof result === "object" && result.__error) throw new Error(result.__error);
@@ -181,7 +196,7 @@ function pageRead(items, fields) {
   const clean = (text) => (text || "").split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean)
     .join("\n");
   const pick = (el, spec) => {
-    if (el.matches("input[type=password]")) return null;
+    if (el.matches("input[type=password], input[type=hidden]")) return null;
     const attr = spec.attr || "text";
     if (attr === "text") return clean(el.innerText);
     if (attr === "value") return el.value;
@@ -271,6 +286,7 @@ const COMMANDS = {
     if (!Array.isArray(hosts) || !hosts.includes(new URL(url).hostname)) {
       throw new Error(`${url} está fuera de los dominios de la receta`);
     }
+    allowedHosts = hosts;
     let tab = null;
     try {
       tab = drivenTab === null ? null : await chrome.tabs.get(drivenTab);

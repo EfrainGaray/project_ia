@@ -192,6 +192,9 @@ class Engine:
             "click", {"selector": step["selector"], "settle_ms": step.get("settle_ms", 800)}
         )
         ctx["url"] = (result or {}).get("url") or ctx["url"]
+        host = urlsplit(ctx["url"]).hostname or ""
+        if host not in ctx["recipe"]["hosts"]:
+            raise Stop("error", f"{ctx['url']} está fuera de los dominios de la receta.")
         await self.detect()
 
     async def op_paginate(self, step, ctx):

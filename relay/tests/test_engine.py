@@ -234,3 +234,24 @@ def test_shipped_recipes_load_and_only_use_known_steps():
             continue
         rec = load_recipe(path)
         assert set(ops(rec["steps"])) <= known, path.name
+
+
+def test_click_that_leaves_recipe_hosts_stops_the_run(tmp_path):
+    browser = FakeBrowser()
+
+    async def leaving(cmd, args=None, original=browser.call):
+        result = await original(cmd, args)
+        if cmd == "click":
+            browser.url = "https://otro.cl/externo"
+            return {"url": browser.url}
+        return result
+
+    browser.call = leaving  # type: ignore[method-assign]
+    rec = recipe(
+        {"op": "open", "url": "{base}/"},
+        {"op": "click", "selector": "a"},
+        {"op": "read", "fields": {"t": "h1"}},
+    )
+    result = run(engine(browser, tmp_path), rec)
+    assert result["estado"] == "error" and "fuera de los dominios" in result["motivo"]
+    assert "read" not in browser.ops()
