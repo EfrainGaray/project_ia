@@ -60,3 +60,31 @@ La decisión técnica principal es elegir qué fuente logra entregar fichas comp
 2. ¿Cómo ejecutar la búsqueda periódica de la app y reutilizar resultados entre corridas? La búsqueda diaria actual ya funciona como una automatización independiente en ChatGPT.
 3. ¿Cuál es el recorrido real de una candidatura en Banco de Chile? Identificar inicio de sesión, campos obligatorios, documentos, vista previa y señal de confirmación antes de diseñar el envío.
 4. ¿Cuánto mejora el flujo? Medir cobertura de fichas completas, requisitos extraídos correctamente, correcciones necesarias y tiempo de preparación comparado con una candidatura manual.
+
+## Ejemplo de principio a fin
+
+Usar como referencia la ficha pública de Itaú «Analista Inteligencia Cobranza». Para probar el comportamiento, usar un perfil ficticio con automatización de validaciones en Python, SQL Server listado sin un proyecto asociado y experiencia operativa sin duración acreditada en cobranza.
+
+| Dato de la ficha | Salida esperada |
+|---|---|
+| «Manejo de SQL Server» | Obligatorio. Pendiente de confirmar con un ejemplo de uso. |
+| «Conocimientos de Python (deseable)» | Deseable. Respaldado por el ejemplo de automatización de validaciones. |
+| «Experiencia de al menos 2 años en funciones similares» | Obligatorio. Pendiente de confirmar con fechas y funciones comparables. |
+| «Dominio avanzado de Excel» | Obligatorio. Pendiente de confirmar si el perfil no aporta evidencia del nivel. |
+
+Al recomendar una versión, explicar qué experiencia específica quedaría más visible. Si hay empate entre dos versiones o la evidencia es insuficiente, presentar las opciones sin asignar un ganador. Una recomendación de CV tampoco certifica que se cumplan los requisitos de la vacante.
+
+## Prueba de integración para el piloto
+
+1. Elegir Bci o LATAM y anotar la URL oficial, la fecha de la prueba y el método de lectura. Verificar un listado y al menos una ficha individual nueva. Registrar si el listado aporta solo títulos y si la ficha aporta requisitos suficientes.
+2. Importar la misma ficha dos veces. Comprobar que conserva un solo registro. Si se modifica un campo en el ejemplo de prueba, verificar que se actualiza la fila y conserva su primera fecha de detección.
+3. Comparar la extracción con una revisión manual de la ficha. Registrar requisitos omitidos, clasificación incorrecta y afirmaciones sin evidencia. La revisión manual sirve como referencia de evaluación.
+4. Elegir un PDF distinto al recomendado. Verificar que el historial distingue ambos y conserva la huella del archivo elegido.
+5. Simular un listado sin fichas, una ficha sin descripción y un fallo de acceso. Mostrar el motivo de cada caso y preservar los datos importados en corridas anteriores.
+
+## Decisiones técnicas para tomar en conjunto
+
+- **Fuentes.** Comparar lectura directa, navegador estándar y proveedor externo autorizado para cada portal. Registrar cobertura, facilidad de mantenimiento, costo y si entrega fichas completas. Una importación manual permite probar el procesamiento mientras se valida el acceso en vivo.
+- **Interfaz.** Para el piloto sirve una salida de terminal con evidencias. Para la revisión de una candidatura, evaluar una vista que reúna el PDF, las respuestas y la aprobación.
+- **IA y ranking.** Primero medir qué cubren las reglas. Registrar por separado interés por la oferta y elección de CV. Usar IA generativa en pasos que requieran interpretación o redacción y revisar su salida contra la fuente. El modelo de ranking se evalúa después con ejemplos etiquetados y una muestra reservada.
+- **Envío verificado.** En la prueba de formulario, documentar cómo se identifica un envío exitoso y cómo se evita repetir una candidatura si se corta la conexión. Validar este recorrido antes de habilitarlo en un portal real.
