@@ -77,3 +77,53 @@ def test_record_keeps_recommendation_choice_and_pdf_hash(tmp_path):
     assert [first, second] == [1, 2]
     assert rows[0] == (1, "datos", "frontend", "cv.pdf", 64, "prefiero React")
     assert rows[1][2] == "datos"
+
+
+def run_app(monkeypatch, *argv):
+    monkeypatch.setattr("sys.argv", ["app.py", *argv])
+    app.main()
+
+
+def test_pending_offer_from_db_explains_and_does_not_recommend(tmp_path, monkeypatch, capsys):
+    from asistente import ofertas
+    db = tmp_path / "t.sqlite3"
+    ofertas.guardar(db, [{"fuente": "bci", "id_origen": "7", "empresa": "Bci", "cargo": "Analista",
+                          "enlace": "https://trabajaenbci.cl/offers/proceso/7"}])
+    with pytest.raises(SystemExit) as exit_info:
+        run_app(monkeypatch, "--bd", str(db), "--oferta-bd", "bci:7", "--reglas")
+    assert exit_info.value.code == 1
+    err = capsys.readouterr().err
+    assert "pendiente de descripción" in err
+
+
+def test_missing_offer_from_db_is_an_error(tmp_path, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        run_app(monkeypatch, "--bd", str(tmp_path / "t.sqlite3"), "--oferta-bd", "bci:404", "--reglas")
+    assert "No hay una oferta" in capsys.readouterr().err
+
+
+def test_complete_offer_from_db_reaches_recommendation_and_records_choice(tmp_path, monkeypatch, capsys):
+    import json as _json
+
+    from asistente import bci, ofertas
+    fixtures = Path(__file__).resolve().parent / "fixtures" / "bci"
+    rows, _ = bci.parse_listing(_json.loads((fixtures / "listado.json").read_text(encoding="utf-8")))
+    detail = bci.parse_detail(_json.loads((fixtures / "proceso_39410.json").read_text(encoding="utf-8")))
+    for row in rows:
+        row["descripcion"] = detail if row["id_origen"] == "39410" else None
+    db = tmp_path / "t.sqlite3"
+    ofertas.guardar(db, rows)
+    run_app(monkeypatch, "--bd", str(db), "--oferta-bd", "bci:39410", "--reglas",
+            "--elegir", "datos", "--motivo", "prefiero destacar análisis")
+    out = capsys.readouterr().out
+    assert "Análisis: reglas" in out and "CV recomendado: automatizacion" in out
+    assert "Aviso: Experiencia en desarrollo e implementación de pipelines ETL/ELT" in out
+    with sqlite3.connect(db) as conn:
+        query = "SELECT cv_recomendado, cv_elegido, length(sha256) FROM decisiones"
+        decision = conn.execute(query).fetchone()
+    assert decision == ("automatizacion", "datos", 64)
+
+
+def test_model_and_rules_together_are_rejected(monkeypatch):
+    with pytest.raises(SystemExit):
+        run_app(monkeypatch, "--modelo", "x", "--reglas")
