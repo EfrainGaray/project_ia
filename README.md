@@ -10,7 +10,7 @@ PDF y elige qué versión registrar en SQLite.
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e ".[dev]"
-ruff check . && mypy app.py itau.py asistente tests && pytest
+ruff check . && mypy app.py itau.py asistente relay tests && pytest
 ```
 
 CI ejecuta lo mismo en cada push y pull request. Para proponer cambios, lee `CONTRIBUTING.md`; las reglas para agentes de código están en `AGENTS.md`.
@@ -105,3 +105,9 @@ las `señales` del perfil (`demo/perfil.json`) asocian la evidencia. Si la frase
 el requisito queda por confirmar aunque haya evidencia. Para revisar sin conexión, guarda las respuestas JSON
 y usa `python3 -m asistente.bci --json listado.json --fichas carpeta/` con fichas `proceso_<id>.json`.
 
+## Relay de navegador
+
+La carpeta `relay/` contiene una extensión de Chrome y un servicio local para ejecutar recetas en el navegador
+de la persona (leer portales que necesitan renderizado o sesión, completar un formulario hasta una vista previa)
+y guardar los resultados en esta misma base. Nada se envía sin aprobar el contenido exacto. Ver
+`relay/README.md`.
