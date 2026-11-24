@@ -10,7 +10,7 @@ PDF y elige qué versión registrar en SQLite.
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e ".[dev]"
-ruff check . && mypy app.py itau.py tests && pytest
+ruff check . && mypy app.py itau.py asistente tests && pytest
 ```
 
 CI ejecuta lo mismo en cada push y pull request. Para proponer cambios, lee `CONTRIBUTING.md`; las reglas para agentes de código están en `AGENTS.md`.
@@ -80,3 +80,28 @@ La tabla `ofertas_itau` guarda título, enlace, ubicación, fecha y, cuando est�
 disponible, descripción. El identificador numérico evita duplicados al volver
 a importar. El lector funciona sin un modelo y prepara los datos para
 conectarlos al recomendador.
+
+## Lector de ofertas públicas de Bci
+
+El portal `trabajaenbci.cl` es una aplicación web que obtiene sus datos de una API JSON pública, sin sesión:
+el listado sale de `POST /api/v3/bci_portals/_search` y cada ficha de `GET /api/v3/bci_portals/proceso/<id>`.
+El lector usa esas mismas rutas con la biblioteca estándar, consulta `robots.txt`, espera al menos un segundo
+entre consultas y se detiene si el portal rechaza el listado.
+
+```sh
+python3 -m asistente.bci --detalles 3
+python3 app.py --oferta-bd bci:39410 --reglas
+```
+
+La primera instrucción guarda las ofertas en la tabla común `ofertas` (una fila por fuente e ID de origen) con
+cargo, empresa, ubicación, fecha de publicación, fecha de detección, enlace oficial y, si se leyó la ficha,
+la descripción con sus secciones «Funciones», «Requisitos» y «Deseable». Las ofertas sin ficha quedan
+«pendiente de descripción». Una nueva importación actualiza los datos sin borrar una descripción ni la primera
+fecha de detección. Los rechazos HTTP y las fichas que no llegan quedan en la tabla `fallos` con fuente, fecha,
+URL, código y motivo.
+
+La segunda instrucción extrae los requisitos con reglas: las secciones «Requisitos» y «Deseable» dan el tipo y
+las `señales` del perfil (`demo/perfil.json`) asocian la evidencia. Si la frase exige años o un nivel avanzado,
+el requisito queda por confirmar aunque haya evidencia. Para revisar sin conexión, guarda las respuestas JSON
+y usa `python3 -m asistente.bci --json listado.json --fichas carpeta/` con fichas `proceso_<id>.json`.
+
