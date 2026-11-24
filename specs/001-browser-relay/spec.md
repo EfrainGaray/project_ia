@@ -123,9 +123,12 @@ See plan.md → Approach. Changing it requires a Change log line here.
 ## Change log
 - 2026-11-24 — `save` guarda también las filas cuya ficha falló (quedan «pendiente de descripción» en vez de
   perderse); destinos reciben `(filas, receta, base_de_datos)` — sin cambio de método.
+- 2026-11-24 — revisión propia: la extensión rechaza comandos si la pestaña salió de los dominios de la receta
+  (redirección o enlace), `read` nunca devuelve campos ocultos y `connect()` evita dos sockets simultáneos (causaba
+  desconexiones intermitentes). Pruebas nuevas primero, luego el arreglo.
 
 ## Verify
-Verdict: partial (2026-11-24). AC1–AC14: cada `check:` pasa (91 pruebas en total, 10 con la extensión cargada en
+Verdict: partial (2026-11-24). AC1–AC14: cada `check:` pasa (94 pruebas en total, 12 con la extensión cargada en
 Chromium sin interfaz; ruff y mypy limpios; Python 3.10 y 3.13). Mutaciones: aceptar un servicio sin prueba de token
 o ignorar el iframe de reCAPTCHA en la extensión hace fallar AC13 y AC6.
 Prueba real de la receta de Bci (extensión en Chromium, 2 páginas, 2 fichas, ritmo 2–4 s): 18 ofertas leídas,
