@@ -3,12 +3,21 @@
     "sql": "SQL Server figura en la lista de herramientas. Falta un ejemplo de uso.",
     "datos": "En una cooperativa ficticia, limpió datos operativos e investigó discrepancias en reportes mensuales.",
     "python": "Usó Python para automatizar la validación de archivos y documentó las excepciones.",
+    "etl": "En un proyecto ficticio, armó un proceso ETL en Python que consolidaba archivos operativos en una base SQL.",
     "frontend": "Desarrolló una interfaz React para consultar incidencias.",
     "coordinacion": "Coordinó con operaciones y soporte la revisión de incidencias y el seguimiento de acuerdos."
   },
   "versiones": {
     "datos": {"pdf": "cv/datos.pdf", "evidencias": ["sql", "datos", "python", "coordinacion"]},
     "frontend": {"pdf": "cv/frontend.pdf", "evidencias": ["frontend", "coordinacion"]},
-    "automatizacion": {"pdf": "cv/automatizacion.pdf", "evidencias": ["python", "coordinacion"]}
+    "automatizacion": {"pdf": "cv/automatizacion.pdf", "evidencias": ["python", "etl", "coordinacion"]}
+  },
+  "señales": {
+    "python": {"palabras": ["python"], "respaldo": true},
+    "etl": {"palabras": ["etl", "elt", "pipelines"], "respaldo": true},
+    "sql": {"palabras": ["sql server", "sql"], "respaldo": false},
+    "datos": {"palabras": ["análisis y gestión de datos", "análisis de datos", "data analyst"], "respaldo": true},
+    "frontend": {"palabras": ["react", "frontend"], "respaldo": true},
+    "coordinacion": {"palabras": ["coordinar", "coordinación"], "respaldo": true}
   }
 }

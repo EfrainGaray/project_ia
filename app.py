@@ -8,6 +8,8 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from asistente import ofertas, reglas
+
 DEMO = Path(__file__).resolve().parent / "demo"
 
 
@@ -72,6 +74,17 @@ def validate(rows, offer, evidence):
             raise ValueError("El análisis contiene un requisito sin cita o evidencia válida.")
 
 
+def offer_from_db(database, reference):
+    source, _, source_id = reference.partition(":")
+    row = ofertas.leer_oferta(database, source, source_id) if source and source_id else None
+    if row is None:
+        raise ValueError(f"No hay una oferta {reference!r} en {database}. Usa el formato fuente:id.")
+    if row["estado"] == ofertas.PENDIENTE:
+        raise ValueError(f"La oferta {reference} está {ofertas.PENDIENTE}: solo admite un filtro preliminar "
+                         "por título. Importa su ficha antes de recomendar un CV.")
+    return f"{row['cargo']}\n{row['empresa']}\n{row['enlace']}\n\n{row['descripcion']}\n"
+
+
 def recommend(rows, versions):
     scores = {}
     for name, version in versions.items():
@@ -116,22 +129,35 @@ def main():
     parser = argparse.ArgumentParser(description="Analiza una oferta y permite elegir un CV.")
     parser.add_argument("--oferta", type=Path, default=DEMO / "oferta.txt")
     parser.add_argument("--perfil", type=Path, default=DEMO / "perfil.json")
+    parser.add_argument("--oferta-bd", metavar="FUENTE:ID",
+                        help="Oferta guardada en SQLite, por ejemplo bci:39410.")
     parser.add_argument("--modelo", help="Modelo de OpenAI para analizar la oferta y la evidencia.")
+    parser.add_argument("--reglas", action="store_true", help="Extrae requisitos con reglas, sin modelo.")
     parser.add_argument("--bd", type=Path, default=Path("postulaciones.sqlite3"))
     parser.add_argument("--elegir", help="Versión que revisaste y quieres guardar.")
     parser.add_argument("--motivo", default="")
     args = parser.parse_args()
 
+    if args.modelo and args.reglas:
+        parser.error("Usa --modelo o --reglas, no ambos.")
     try:
-        offer = args.oferta.read_text(encoding="utf-8")
+        if args.oferta_bd:
+            offer = offer_from_db(args.bd, args.oferta_bd)
+        else:
+            offer = args.oferta.read_text(encoding="utf-8")
         profile = read_json(args.perfil)
         evidence, versions = profile["evidencias"], profile["versiones"]
         if args.modelo:
             rows = analyze(offer, evidence, args.modelo)
             mode = args.modelo
+        elif args.reglas:
+            rows = reglas.extraer(offer, profile)
+            mode = "reglas"
         else:
+            if args.oferta_bd:
+                raise ValueError("Para una oferta guardada, indica --reglas o --modelo.")
             if args.oferta.resolve() != DEMO / "oferta.txt" or args.perfil.resolve() != DEMO / "perfil.json":
-                raise ValueError("Para analizar una oferta o perfil propio, indica --modelo.")
+                raise ValueError("Para analizar una oferta o perfil propio, indica --reglas o --modelo.")
             rows = read_json(DEMO / "referencia.json")
             mode = "referencia manual"
         validate(rows, offer, evidence)

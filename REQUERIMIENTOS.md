@@ -25,7 +25,7 @@
 
 - `app.py` calcula una recomendación, registra la elección en SQLite y guarda la huella del PDF. El ejemplo de Itaú usa una referencia manual y un perfil ficticio. La ruta opcional a OpenAI se probó con una respuesta simulada; falta validarla con un modelo real.
 - `itau.py` importa listados y fichas HTML. En el Mac se importaron 25 ofertas de una copia real del listado. Desde Codex, la consulta directa a Itaú recibió HTTP 403.
-- En una prueba puntual, Bci devolvió 17 registros con ID y título en los datos del listado. Faltan la ficha completa y la integración al repositorio. LATAM respondió con el HTML inicial de la página, sin requisitos en esa respuesta. Queda por validar una ficha renderizada.
+- `asistente/bci.py` lee Bci desde la API pública que usa su sitio (prueba del 2026-11-24: 45 ofertas publicadas, listado y fichas completas con requisitos). Guarda en la tabla común `ofertas` y registra los fallos por fuente. `app.py --oferta-bd bci:<id> --reglas` lleva una ficha guardada hasta la recomendación con reglas de Python. Itaú todavía usa su propia tabla. LATAM respondió con el HTML inicial de la página, sin requisitos en esa respuesta. Queda por validar una ficha renderizada.
 - La búsqueda diaria en ChatGPT es independiente del repositorio. Consulta los siete empleadores y avisa si encuentra novedades relevantes. Su cobertura depende de las páginas públicas y de la indexación.
 - La integración con formularios autenticados y el seguimiento por correo están pendientes. Los recolectores y servicios externos evaluados siguen siendo opciones sujetas a comprobar cobertura y acceso.
 
