@@ -4,6 +4,17 @@ Primer prototipo de portafolio. Convierte una oferta en requisitos con citas,
 los compara con evidencia del perfil y recomienda un CV. La persona revisa el
 PDF y elige qué versión registrar en SQLite.
 
+## Desarrollo
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -e ".[dev]"
+ruff check . && mypy app.py itau.py tests && pytest
+```
+
+CI ejecuta lo mismo en cada push y pull request. Las reglas para agentes de código están en `AGENTS.md`.
+
 ## Demo local
 
 Requiere Python 3.10 o posterior. Usa la biblioteca estándar.

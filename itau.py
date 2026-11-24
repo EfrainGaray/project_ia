@@ -49,7 +49,7 @@ class Portal:
         rules = self.fetch(f"https://{HOST}/robots.txt")
         self.robots = RobotFileParser()
         self.robots.parse(rules.splitlines())
-        self.delay = max(1, self.robots.crawl_delay(AGENT) or 0)
+        self.delay = max(1.0, float(self.robots.crawl_delay(AGENT) or 0))
 
     def fetch(self, url):
         if not public_url(url):
@@ -79,7 +79,7 @@ def parse_search(html):
     for row in table.select("tr"):
         cells = row.find_all("td", recursive=False)
         for link in row.select("a[href]"):
-            parts = urlsplit(urljoin(SEARCH, link["href"]))
+            parts = urlsplit(urljoin(SEARCH, str(link["href"])))
             url = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
             match = JOB_PATH.fullmatch(parts.path)
             title = link.get_text(" ", strip=True)
@@ -95,7 +95,7 @@ def parse_search(html):
                 break
     next_pages = []
     for link in page.select("a[href]"):
-        url = urljoin(SEARCH, link["href"])
+        url = urljoin(SEARCH, str(link["href"]))
         parts = urlsplit(url)
         if parts.path == "/search" and "startrow=" in parts.query and public_url(url):
             next_pages.append(url)
@@ -105,7 +105,8 @@ def parse_search(html):
 def parse_detail(html):
     page = BeautifulSoup(html, "html.parser")
     description = page.select_one(
-        '[itemprop="description"], .jobdescription, .job-description, [data-careersite-propertyid="description"]'
+        '[itemprop="description"], .jobdescription, .job-description, '
+        '[data-careersite-propertyid="description"]'
     )
     if description is None or not description.get_text(strip=True):
         raise ValueError("El HTML de la ficha no contiene una descripción reconocible.")
@@ -138,7 +139,7 @@ def main():
     if args.html and args.detalles:
         parser.error("Para HTML guardado, usa --fichas en lugar de --detalles.")
     try:
-        jobs = {}
+        jobs: dict[str, dict] = {}
         if args.html:
             for path in args.html:
                 rows, _ = parse_search(path.read_text(encoding="utf-8-sig"))
@@ -146,7 +147,7 @@ def main():
         else:
             portal = Portal()
             pending = [SEARCH]
-            visited = set()
+            visited: set[str] = set()
             while pending and len(visited) < args.paginas:
                 url = pending.pop(0)
                 visited.add(url)
