@@ -1,6 +1,6 @@
 # 002 — P0: lector público de Bci y modelo genérico de oferta
 
-Status: building | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
+Status: verifying | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
 Request: "Primera entrega: tomar una ficha pública nueva de Bci o LATAM y cerrar el flujo hasta la recomendación."
 Relates: REQUERIMIENTOS.md (P0, criterios de aceptación, «Prueba de integración para el piloto»)
 
@@ -12,7 +12,7 @@ todas las fuentes y llevar una ficha nueva hasta una recomendación de CV con ci
 
 ## Scenarios
 ### S1 — Importar Bci (P1)
-Given el portal público de Bci, when se ejecuta `python bci.py --detalles 1`, then quedan filas en `ofertas` con
+Given el portal público de Bci, when se ejecuta `python -m asistente.bci --detalles 1`, then quedan filas en `ofertas` con
 cargo, empresa, ID de origen, fechas de publicación y detección, ubicación, enlace oficial y, para la ficha leída,
 la descripción con requisitos.
 ### S2 — Importar dos veces (P1)
@@ -85,8 +85,16 @@ See plan.md → Approach. Changing it requires a Change log line here.
 - Los fixtures son respuestas reales grabadas (listado recortado a 3 ofertas); las pruebas no hacen llamadas en vivo.
 
 ## Change log
+- 2026-11-24 — módulos nuevos en el paquete `asistente/` (no en la raíz) y `[tool.setuptools]` explícito en
+  `pyproject.toml` — la autodetección de setuptools falla con más de un paquete en la raíz — sin cambio de método.
 
 ## Verify
+Verdict: verified (2026-11-24, commit 0a23043). AC1–AC9: cada `check:` pasa (`pytest`, 54 pruebas; ruff y mypy
+limpios). Mutaciones: quitar el `COALESCE` de la descripción o la consulta a robots.txt hace fallar AC2 y AC7.
+AC10: corrida en vivo 2026-11-24 19:26 UTC, `python -m asistente.bci --paginas 1 --detalles 3` → 20 ofertas, 3
+completas, 0 fallos, 8,8 s; la segunda corrida sin fichas conservó las 3 descripciones y la fecha de detección.
+`app.py --oferta-bd bci:39393 --reglas` mostró requisitos con cita; `bci:39410` sin ficha salió con «pendiente de
+descripción». No verificado: términos de uso del sitio (no se encontró una página de términos para el portal).
 
 ## Observe (define now, read after ship)
 - O1: fichas completas por corrida en vivo — where: `SELECT estado, COUNT(*) FROM ofertas WHERE fuente='bci'` —
