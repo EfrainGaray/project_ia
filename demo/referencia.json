@@ -1,0 +1,9 @@
+[
+  {"requisito":"Experiencia similar","cita":"Experiencia de al menos 2 años en funciones similares.","tipo":"obligatorio","estado":"por confirmar","evidencia":null},
+  {"requisito":"SQL Server","cita":"Manejo de SQL Server.","tipo":"obligatorio","estado":"por confirmar","evidencia":"sql"},
+  {"requisito":"Excel avanzado","cita":"Dominio avanzado de Excel.","tipo":"obligatorio","estado":"por confirmar","evidencia":null},
+  {"requisito":"Análisis de datos","cita":"Experiencia en análisis y gestión de datos.","tipo":"obligatorio","estado":"respaldado","evidencia":"datos"},
+  {"requisito":"Python","cita":"Conocimientos de Python (deseable).","tipo":"deseable","estado":"respaldado","evidencia":"python"},
+  {"requisito":"Detección de mejoras","cita":"Capacidad para analizar información y detectar oportunidades de mejora.","tipo":"obligatorio","estado":"por confirmar","evidencia":"datos"},
+  {"requisito":"Coordinación","cita":"Habilidades para coordinar iniciativas con distintas áreas de la organización.","tipo":"obligatorio","estado":"respaldado","evidencia":"coordinacion"}
+]

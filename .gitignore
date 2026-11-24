@@ -1,0 +1,5 @@
+/privado/
+*.sqlite3*
+.env
+__pycache__/
+.venv/

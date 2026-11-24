@@ -1,0 +1,14 @@
+{
+  "evidencias": {
+    "sql": "SQL Server figura en la lista de herramientas. Falta un ejemplo de uso.",
+    "datos": "En una cooperativa ficticia, limpió datos operativos e investigó discrepancias en reportes mensuales.",
+    "python": "Usó Python para automatizar la validación de archivos y documentó las excepciones.",
+    "frontend": "Desarrolló una interfaz React para consultar incidencias.",
+    "coordinacion": "Coordinó con operaciones y soporte la revisión de incidencias y el seguimiento de acuerdos."
+  },
+  "versiones": {
+    "datos": {"pdf": "cv/datos.pdf", "evidencias": ["sql", "datos", "python", "coordinacion"]},
+    "frontend": {"pdf": "cv/frontend.pdf", "evidencias": ["frontend", "coordinacion"]},
+    "automatizacion": {"pdf": "cv/automatizacion.pdf", "evidencias": ["python", "coordinacion"]}
+  }
+}
