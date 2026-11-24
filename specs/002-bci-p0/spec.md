@@ -1,6 +1,6 @@
 # 002 — P0: lector público de Bci y modelo genérico de oferta
 
-Status: verifying | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
+Status: done | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
 Request: "Primera entrega: tomar una ficha pública nueva de Bci o LATAM y cerrar el flujo hasta la recomendación."
 Relates: REQUERIMIENTOS.md (P0, criterios de aceptación, «Prueba de integración para el piloto»)
 
@@ -103,3 +103,17 @@ descripción». No verificado: términos de uso del sitio (no se encontró una p
   (detenerse y revisar términos antes de seguir).
 
 ## As-built
+Cerrada 2026-11-24. Integrada en `main` con la PR #2 (merge `a21411e`).
+
+- Commits: `6f117c3` spec · `d8c6b89` modelo común `ofertas` + `fallos` · `864e7ac` lector de Bci + fixtures ·
+  `312cf8a` reglas y `app.py --oferta-bd --reglas` · `0a23043` docs · `9213f34` evidencia de verificación.
+- ADDED: `asistente/ofertas.py`, `asistente/bci.py`, `asistente/reglas.py`, `tests/test_ofertas.py`,
+  `tests/test_bci.py`, `tests/test_reglas.py`, `tests/fixtures/bci/`; flags `--oferta-bd` y `--reglas` en `app.py`;
+  `señales` en `demo/perfil.json`.
+- CHANGED: módulos en el paquete `asistente/` en vez de la raíz (ver Change log); `README.md` y
+  `REQUERIMIENTOS.md` (estado actual).
+- DROPPED: nada.
+- Fuera de la spec: ninguno.
+- No verificado: términos de uso del portal de Bci (no se encontró la página); O1 y O2 se leen tras una semana de
+  uso real. Itaú sigue en `ofertas_itau` (pasa a la spec 007).
+
