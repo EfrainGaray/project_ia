@@ -1,0 +1,31 @@
+{
+  "name": "bci_ofertas",
+  "nota": "Selectores tomados del DOM renderizado de trabajaenbci.cl el 2026-11-24.",
+  "base": "https://trabajaenbci.cl",
+  "hosts": ["trabajaenbci.cl"],
+  "pace": [3, 8],
+  "steps": [
+    {"op": "open", "url": "{base}/offers/"},
+    {"op": "paginate", "next": ".sk-pagination-navigation [data-key='next']:not(.is-disabled)", "max_pages": 3,
+     "settle_ms": 2000, "steps": [
+      {"op": "wait", "selector": ".offer-hit-card a[href*='/offers/proceso/']"},
+      {"op": "read", "items": ".offer-hit-card", "into": "ofertas", "fields": {
+        "cargo": {"selector": "h2.card-title"},
+        "enlace": {"selector": "a[href*='/offers/proceso/']", "attr": "href"},
+        "ubicacion": {"selector": ".icons-info", "label": "Lugar de trabajo"},
+        "fecha_publicacion": {"selector": ".icons-info", "label": "Fecha de publicación"}
+      }}
+    ]},
+    {"op": "foreach", "in": "ofertas", "unique": "enlace", "max": 10, "steps": [
+      {"op": "open", "url": "{item.enlace}"},
+      {"op": "wait", "selector": ".single-offer .label-subtitle", "timeout_ms": 8000},
+      {"op": "read", "into": "item", "fields": {
+        "mision": {"selector": ".single-offer .label-subtitle", "heading": "Misión"},
+        "funciones": {"selector": ".single-offer .label-subtitle", "heading": "oportunidad de"},
+        "requisitos": {"selector": ".single-offer .label-subtitle", "heading": "necesitas"},
+        "deseable": {"selector": ".single-offer .label-subtitle", "heading": "aún mejor"}
+      }}
+    ]},
+    {"op": "save", "from": "ofertas", "to": "ofertas_bci"}
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "latam_ofertas",
+  "nota": "POR CALIBRAR: el sitio rechaza navegadores automatizados sin sesión (403, 2026-11-24). Ajustar los selectores abriendo la página en el Chrome de la persona; las pruebas usan una página local renderizada con JavaScript.",
+  "base": "https://www.latamairlines.com",
+  "hosts": ["www.latamairlines.com"],
+  "pace": [4, 10],
+  "steps": [
+    {"op": "open", "url": "{base}/cl/es/trabaja-con-nosotros"},
+    {"op": "wait", "selector": "[data-job-card] a[href]", "timeout_ms": 20000},
+    {"op": "read", "items": "[data-job-card]", "into": "ofertas", "fields": {
+      "cargo": {"selector": "[data-job-title]"},
+      "enlace": {"selector": "a[href]", "attr": "href"},
+      "ubicacion": {"selector": "[data-job-location]"}
+    }},
+    {"op": "foreach", "in": "ofertas", "unique": "enlace", "max": 5, "steps": [
+      {"op": "open", "url": "{item.enlace}"},
+      {"op": "wait", "selector": "[data-job-description]", "timeout_ms": 20000},
+      {"op": "read", "into": "item", "fields": {
+        "id": {"selector": "[data-job-id]"},
+        "descripcion": {"selector": "[data-job-description]"}
+      }}
+    ]},
+    {"op": "save", "from": "ofertas", "to": "ofertas_latam"}
+  ]
+}

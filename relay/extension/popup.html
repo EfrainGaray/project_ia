@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relay de recetas</title>
+  <style>
+    :root { color-scheme: light dark; --fg:#1b1b1b; --bg:#fff; --muted:#5f6368; --accent:#c62828; }
+    @media (prefers-color-scheme: dark) { :root { --fg:#ececec; --bg:#202124; --muted:#9aa0a6; --accent:#ef5350; } }
+    body { margin:0; padding:12px; width:min(320px, 100vw); box-sizing:border-box; font:14px/1.4 system-ui, sans-serif;
+           color:var(--fg); background:var(--bg); }
+    h1 { font-size:16px; margin:0 0 8px; }
+    p { margin:0 0 10px; color:var(--muted); }
+    label { display:block; margin:8px 0 2px; }
+    input { width:100%; box-sizing:border-box; padding:6px; font:inherit; }
+    .row { display:flex; gap:8px; margin-top:10px; }
+    button { flex:1; padding:8px; font:inherit; font-weight:600; border-radius:6px; border:1px solid var(--muted);
+             background:transparent; color:var(--fg); cursor:pointer; }
+    #stop { background:var(--accent); border-color:var(--accent); color:#fff; }
+  </style>
+</head>
+<body>
+  <h1>Relay de recetas</h1>
+  <p id="status">Revisando…</p>
+  <div class="row">
+    <button type="button" id="stop">Detener</button>
+    <button type="button" id="resume">Reactivar</button>
+  </div>
+  <label for="token">Token de emparejamiento</label>
+  <input id="token" type="password" autocomplete="off" placeholder="python -m relay.service.cli token">
+  <label for="port">Puerto local</label>
+  <input id="port" type="number" min="1024" max="65535">
+  <div class="row"><button type="button" id="save">Guardar</button></div>
+  <script src="popup.js"></script>
+</body>
+</html>

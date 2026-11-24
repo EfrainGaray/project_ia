@@ -1,6 +1,6 @@
 # 001 — Relay de navegador propio: recetas en el Chrome de la persona
 
-Status: approved | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
+Status: verifying | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
 Request: "Construir nuestra propia extensión: ejecutar recetas por portal (abrir página, esperar, leer campos,
 paginar, completar un formulario hasta una VISTA PREVIA) dentro del Chrome donde la persona ya inició sesión,
 con un programador local, a ritmo humano, guardando los resultados en el mismo SQLite."
@@ -121,8 +121,20 @@ See plan.md → Approach. Changing it requires a Change log line here.
   proyecto registra. El asistente registra el destino `ofertas`.
 
 ## Change log
+- 2026-11-24 — `save` guarda también las filas cuya ficha falló (quedan «pendiente de descripción» en vez de
+  perderse); destinos reciben `(filas, receta, base_de_datos)` — sin cambio de método.
+- 2026-11-24 — revisión propia: la extensión rechaza comandos si la pestaña salió de los dominios de la receta
+  (redirección o enlace), `read` nunca devuelve campos ocultos y `connect()` evita dos sockets simultáneos (causaba
+  desconexiones intermitentes). Pruebas nuevas primero, luego el arreglo.
 
 ## Verify
+Verdict: partial (2026-11-24). AC1–AC14: cada `check:` pasa (94 pruebas en total, 12 con la extensión cargada en
+Chromium sin interfaz; ruff y mypy limpios; Python 3.10 y 3.13). Mutaciones: aceptar un servicio sin prueba de token
+o ignorar el iframe de reCAPTCHA en la extensión hace fallar AC13 y AC6.
+Prueba real de la receta de Bci (extensión en Chromium, 2 páginas, 2 fichas, ritmo 2–4 s): 18 ofertas leídas,
+2 fichas completas con «Requisitos», corrida «ok».
+No verificado: SC1 y SC2 en el Chrome de la persona; la receta de LATAM contra el sitio real (responde 403 a
+navegadores automatizados sin sesión); el comportamiento del service worker tras horas de inactividad.
 
 ## Observe (define now, read after ship)
 - O1: corridas programadas con estado «ok» — where: tabla `relay_corridas` — when: +7 días de uso — success: ≥80 %

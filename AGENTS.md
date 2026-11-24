@@ -7,7 +7,7 @@ Lee primero `README.md` y `REQUERIMIENTOS.md` (historia de usuario, criterios de
   luego el arreglo) · 3 mini-spec (comportamiento nuevo: objetivo, criterios con su verificación y un caso negativo) · 4 spec
   completa (fuentes nuevas, envío de postulaciones, datos personales). Nunca bajes de nivel en silencio.
 - Cada criterio de aceptación de `REQUERIMIENTOS.md` que implementes tiene su prueba en `tests/` con un caso negativo.
-- Antes de cada commit: `ruff check .`, `mypy app.py itau.py asistente tests` y `pytest` en verde. CI corre lo mismo.
+- Antes de cada commit: `ruff check .`, `mypy app.py itau.py asistente relay tests` y `pytest` en verde. CI corre lo mismo.
 - Commits atómicos con conventional commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`).
 
 ## Reglas del dominio (no negociables)
