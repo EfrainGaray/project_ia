@@ -1,0 +1,18 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Bci - Portal de trabajo (copia local de prueba)</title></head>
+<body><!-- Local copy of the structure of https://trabajaenbci.cl/offers/ (2026-11-24) for tests. -->
+<div class="section"><div class="row-cols-1 row-cols-md-3 row" id="hits"></div></div>
+<div class="sk-pagination-navigation is-numbered"><div class="sk-toggle">
+<div class="sk-toggle-option sk-toggle__item is-disabled" data-key="previous">Anterior</div>
+<div class="sk-toggle-option sk-toggle__item" data-key="next" id="next">Siguiente</div></div></div>
+<script>
+const pages = ["<div class=\"mb-4 col-sm-12 col-md-6 col-lg-4\"><div class=\"material-shadow h-100 offer-hit-card card\">\n<a class=\"text-decoration-none d-block\" href=\"/bci/offers/proceso/39393.html\"><div class=\"card-body\">\n<h2 class=\"font-weight-bolder card-title\">Especialista Valor Pyme y Ecosistema de Impacto <br>(C\u00d3DIGO s2827)</h2>\n<div class=\"icons-info-container row\"><div class=\"col-12\">\n<div class=\"icons-info flex-fill\"><p>Lugar de trabajo</p><p>Las Condes</p></div>\n<div class=\"icons-info flex-fill\"><p>Fecha de publicaci\u00f3n</p><p>24/11/2026</p></div>\n</div></div></div></a></div></div><div class=\"mb-4 col-sm-12 col-md-6 col-lg-4\"><div class=\"material-shadow h-100 offer-hit-card card\">\n<a class=\"text-decoration-none d-block\" href=\"/bci/offers/proceso/39410.html\"><div class=\"card-body\">\n<h2 class=\"font-weight-bolder card-title\">Especialista Procesos y Proyectos Tarjeta <br>(C\u00d3DIGO s2844)</h2>\n<div class=\"icons-info-container row\"><div class=\"col-12\">\n<div class=\"icons-info flex-fill\"><p>Lugar de trabajo</p><p>Santiago</p></div>\n<div class=\"icons-info flex-fill\"><p>Fecha de publicaci\u00f3n</p><p>21/11/2026</p></div>\n</div></div></div></a></div></div>", "<div class=\"mb-4 col-sm-12 col-md-6 col-lg-4\"><div class=\"material-shadow h-100 offer-hit-card card\">\n<a class=\"text-decoration-none d-block\" href=\"/bci/offers/proceso/39319.html\"><div class=\"card-body\">\n<h2 class=\"font-weight-bolder card-title\">Ejecutivo/a Especialista Hipotecario (Reemplazo) <br>(C\u00d3DIGO s2748)</h2>\n<div class=\"icons-info-container row\"><div class=\"col-12\">\n<div class=\"icons-info flex-fill\"><p>Lugar de trabajo</p><p>Providencia</p></div>\n<div class=\"icons-info flex-fill\"><p>Fecha de publicaci\u00f3n</p><p>24/11/2026</p></div>\n</div></div></div></a></div></div><div class=\"mb-4 col-sm-12 col-md-6 col-lg-4\"><div class=\"material-shadow h-100 offer-hit-card card\">\n<a class=\"text-decoration-none d-block\" href=\"/bci/offers/proceso/39410.html\"><div class=\"card-body\">\n<h2 class=\"font-weight-bolder card-title\">Especialista Procesos y Proyectos Tarjeta <br>(C\u00d3DIGO s2844)</h2>\n<div class=\"icons-info-container row\"><div class=\"col-12\">\n<div class=\"icons-info flex-fill\"><p>Lugar de trabajo</p><p>Santiago</p></div>\n<div class=\"icons-info flex-fill\"><p>Fecha de publicaci\u00f3n</p><p>21/11/2026</p></div>\n</div></div></div></a></div></div>"];
+let page = 0;
+function render() {
+  document.getElementById("hits").innerHTML = pages[page];
+  document.getElementById("next").classList.toggle("is-disabled", page === pages.length - 1);
+}
+document.getElementById("next").addEventListener("click", () => {
+  if (page < pages.length - 1) { page += 1; setTimeout(render, 200); }
+});
+setTimeout(render, 300);
+</script></body></html>

@@ -1,0 +1,21 @@
+{
+  "name": "practica_formulario",
+  "nota": "Formulario de práctica local. Llega a la vista previa; el envío solo ocurre con la huella aprobada.",
+  "base": "http://127.0.0.1:8000",
+  "hosts": ["127.0.0.1"],
+  "pace": [2, 5],
+  "steps": [
+    {"op": "open", "url": "{base}/practica/formulario.html"},
+    {"op": "wait", "selector": "#postulacion"},
+    {"op": "fill", "fields": {
+      "#nombre": "{input.nombre}",
+      "#correo": "{input.correo}",
+      "#cargo": "{input.cargo}",
+      "#region": "{input.region}",
+      "#mensaje": "{input.mensaje}",
+      "#acepto": "{input.acepto}"
+    }},
+    {"op": "preview", "form": "#postulacion", "button": "#previsualizar"},
+    {"op": "submit", "form": "#postulacion", "button": "#enviar"}
+  ]
+}

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Empleos (página local renderizada con JavaScript)</title></head>
+<body>
+<!-- The initial HTML has no jobs; they appear after a script runs, like a client-rendered careers site. -->
+<main id="app"><p>Cargando…</p></main>
+<script>
+setTimeout(() => {
+  document.getElementById("app").innerHTML = `
+    <article data-job-card><a href="/latam/empleo/ana-001.html"><h3 data-job-title>Analista de Datos Comerciales</h3></a>
+      <span data-job-location>Santiago, Chile</span></article>
+    <article data-job-card><a href="/latam/empleo/ing-002.html"><h3 data-job-title>Ingeniero/a de Automatización</h3></a>
+      <span data-job-location>Pudahuel, Chile</span></article>`;
+}, 900);
+</script>
+</body></html>

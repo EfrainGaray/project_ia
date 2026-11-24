@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formulario de práctica</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.4 system-ui, sans-serif; margin: 0 auto; padding: 16px; max-width: 640px; }
+  label { display: block; margin-top: 10px; } input, select, textarea { width: 100%; box-sizing: border-box; }
+  #vista { margin-top: 16px; padding: 12px; border: 2px dashed currentColor; }
+</style></head>
+<body>
+<h1>Postulación de práctica</h1>
+<form id="postulacion" method="post" action="/practica/enviar">
+  <input type="hidden" name="csrf" value="token-de-prueba">
+  <label>Nombre <input id="nombre" name="nombre" required></label>
+  <label>Correo <input id="correo" name="correo" type="email" required></label>
+  <label>Cargo <input id="cargo" name="cargo"></label>
+  <label>Región
+    <select id="region" name="region"><option value="">Elige</option><option value="RM">Metropolitana</option>
+    <option value="V">Valparaíso</option></select></label>
+  <label>Mensaje <textarea id="mensaje" name="mensaje" rows="4"></textarea></label>
+  <label>Clave del portal (nunca la completa el asistente) <input id="clave" name="clave" type="password"></label>
+  <label><input id="acepto" name="acepto" type="checkbox"> Acepto el tratamiento de datos</label>
+  <button type="button" id="previsualizar">Vista previa</button>
+  <button type="submit" id="enviar">Enviar postulación</button>
+</form>
+<section id="vista" hidden></section>
+<script>
+document.getElementById("previsualizar").addEventListener("click", () => {
+  const data = new FormData(document.getElementById("postulacion"));
+  const vista = document.getElementById("vista");
+  vista.hidden = false;
+  vista.textContent = "Vista previa: " + ["nombre", "correo", "cargo", "region", "mensaje"]
+    .map((k) => `${k}=${data.get(k)}`).join(" · ");
+});
+</script>
+</body></html>
