@@ -1,6 +1,6 @@
 # 001 — Relay de navegador propio: recetas en el Chrome de la persona
 
-Status: verifying | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
+Status: done | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 8bdc18c
 Request: "Construir nuestra propia extensión: ejecutar recetas por portal (abrir página, esperar, leer campos,
 paginar, completar un formulario hasta una VISTA PREVIA) dentro del Chrome donde la persona ya inició sesión,
 con un programador local, a ritmo humano, guardando los resultados en el mismo SQLite."
@@ -144,3 +144,19 @@ navegadores automatizados sin sesión); el comportamiento del service worker tra
 - O3: envíos sin aprobación — where: `relay_aprobaciones` y la persona — when: cada uso — success: 0 — fail: 1.
 
 ## As-built
+Cerrada 2026-11-24. Spec integrada con la PR #3 (merge `0c47c14`) y el MVP con la PR #4 (merge `910e767`).
+
+- Commits: `95f3861` spec · `2eefe05` servicio local (WebSocket, motor, aprobaciones, programador) · `266ecad`
+  extensión MV3 con insignia, franja y «Detener» · `ddd34a3` recetas + pruebas Playwright · `846ae17` destino
+  `ofertas` · `6646245` job `relay-e2e` en CI · `558211e` docs · `a1cdc6d` evidencia · `a5f8469` arreglos de la
+  revisión propia · `fbb1f08` change log.
+- ADDED: `relay/extension/`, `relay/service/{ws,engine,store,scheduler,cli}.py`, `relay/recipes/`
+  (`bci_ofertas`, `latam_ofertas`, `practica_formulario`, `agenda.example.json`), `relay/tests/`,
+  `asistente/relay_destino.py`, `relay/README.md`, extra `relay-test` en `pyproject.toml`, job `relay-e2e`.
+- CHANGED: paso `foreach` (recorrer fichas de un listado) y órdenes `token` y `show <huella>` en la CLI, necesarios para leer
+  fichas y revisar el contenido antes de aprobar; `save` también guarda filas sin ficha (Change log).
+- DROPPED: orden `status` de la CLI (el estado se consulta en `relay_corridas`). Verdict de Verify «partial» porque SC1/SC2 y LATAM real requieren el Chrome de la persona.
+- Fuera de la spec: ninguno.
+- No verificado (pasa a otras specs): SC1 y SC2 en el Chrome de la persona; receta de LATAM contra el sitio real
+  (spec 003); service worker tras horas de inactividad; O1–O3 tras 7 días de uso.
+
