@@ -1,6 +1,10 @@
 import hashlib
+import json
 import sqlite3
+import subprocess
+import sys
 from contextlib import closing
+from pathlib import Path
 
 import pytest
 
@@ -223,3 +227,49 @@ def test_cambio_de_version_usa_la_nueva_decision(candidatura):
     assert fila["estado"] == "listo"
     assert fila["huella"] != anterior
     candidaturas.aprobar(bd, identificador, fila["huella"])
+
+
+def test_cli_recorrido(tmp_path):
+    bd = tmp_path / "demo.sqlite3"
+    pdf = Path(__file__).resolve().parents[1] / "demo" / "cv" / "datos.pdf"
+    ofertas.guardar(bd, [{
+        "fuente": "demo", "id_origen": "1", "empresa": "Banco de prueba",
+        "cargo": "Analista", "enlace": "https://example.org/oferta",
+    }])
+    decision = record(bd, "reglas", "Analista", [], "datos", "datos", pdf, "Prueba ficticia")
+
+    def cli(*args, check=True):
+        return subprocess.run(  # noqa: S603 - invokes the test interpreter with fixture arguments
+            [sys.executable, "-m", "asistente.candidaturas", "--bd", str(bd), *args],
+            text=True, capture_output=True, check=check,
+        )
+
+    identificador = cli("crear", "demo:1", str(decision), str(pdf)).stdout.strip()
+    respuestas = tmp_path / "respuestas.json"
+    respuestas.write_text('{"motivación":"{pendiente}"}', encoding="utf-8")
+    cli("responder", identificador, str(respuestas))
+    error = cli("listo", identificador, check=False)
+    assert error.returncode == 1
+    assert "motivación" in error.stderr
+    respuestas.write_text('{"motivación":"Análisis con Python"}', encoding="utf-8")
+    cli("responder", identificador, str(respuestas))
+    cli("listo", identificador)
+    fila = json.loads(cli("mostrar", identificador).stdout)
+    assert fila["archivo"] == str(pdf)
+    assert fila["estado"] == "listo"
+    assert fila["respuestas"] == {"motivación": "Análisis con Python"}
+
+    error = cli("aprobar", identificador, "0" * 64, check=False)
+    assert error.returncode == 1
+    assert "huella" in error.stderr
+    cli("aprobar", identificador, fila["huella"])
+    cli("incierto", identificador)
+    cli("no-enviado", identificador)
+    cli("enviado", identificador, "--comprobante", "folio-demo")
+    resultado = json.loads(cli("mostrar", identificador).stdout)
+    assert resultado["comprobante"] == "folio-demo"
+    assert resultado["estado"] == "enviado"
+    eventos = json.loads(cli("historial", identificador).stdout)
+    assert [evento["estado_nuevo"] for evento in eventos] == [
+        "listo", "aprobado", "por_verificar", "aprobado", "enviado",
+    ]

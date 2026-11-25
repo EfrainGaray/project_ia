@@ -1,5 +1,6 @@
 """Candidaturas locales, huella de revisión e historial de estados."""
 
+import argparse
 import hashlib
 import json
 import sqlite3
@@ -276,3 +277,78 @@ def marcar_envio(
         database, candidatura_id, estados[resultado],
         motivo=f"Resultado de envío: {resultado}", comprobante=comprobante,
     )
+
+
+def historial(database: str | Path, candidatura_id: int) -> list[dict]:
+    with closing(_conectar(database)) as db:
+        _fila(db, candidatura_id)
+        eventos = db.execute("""
+            SELECT estado_anterior, estado_nuevo, fecha, huella, motivo
+            FROM candidatura_eventos WHERE candidatura_id = ? ORDER BY id
+        """, (candidatura_id,))
+        return [dict(evento) for evento in eventos]
+
+
+def _leer_respuestas(archivo: Path) -> dict[str, str]:
+    respuestas = json.loads(archivo.read_text(encoding="utf-8"))
+    if not isinstance(respuestas, dict) or any(not isinstance(valor, str) for valor in respuestas.values()):
+        raise ValueError("Las respuestas deben ser un objeto JSON con valores de texto.")
+    return respuestas
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Prepara y revisa candidaturas guardadas en SQLite.")
+    parser.add_argument("--bd", type=Path, default=Path("postulaciones.sqlite3"))
+    comandos = parser.add_subparsers(dest="comando", required=True)
+    nuevo = comandos.add_parser("crear", help="Crea un borrador con una oferta y un CV registrados.")
+    nuevo.add_argument("oferta", metavar="FUENTE:ID")
+    nuevo.add_argument("decision", type=int)
+    nuevo.add_argument("pdf", type=Path)
+
+    for comando, ayuda in (
+        ("responder", "Reemplaza las respuestas con las de un archivo JSON."),
+        ("listo", "Marca el borrador como listo para revisar."),
+        ("mostrar", "Muestra el contenido, las respuestas pendientes y la huella."),
+        ("aprobar", "Aprueba la huella que revisaste."),
+        ("enviado", "Registra la confirmación de un envío previo."),
+        ("incierto", "Registra un envío sin confirmación."),
+        ("no-enviado", "Confirma que el envío incierto no se realizó."),
+        ("historial", "Muestra los cambios de estado en orden."),
+    ):
+        subcomando = comandos.add_parser(comando, help=ayuda)
+        subcomando.add_argument("id", type=int)
+        if comando == "responder":
+            subcomando.add_argument("respuestas", type=Path, metavar="RESPUESTAS_JSON")
+        elif comando == "aprobar":
+            subcomando.add_argument("huella")
+        elif comando == "enviado":
+            subcomando.add_argument("--comprobante")
+
+    args = parser.parse_args()
+    try:
+        if args.comando == "crear":
+            fuente, _, id_origen = args.oferta.partition(":")
+            if not fuente or not id_origen:
+                raise ValueError("Indica la oferta como FUENTE:ID.")
+            print(crear(args.bd, fuente, id_origen, args.decision, args.pdf))
+        elif args.comando == "responder":
+            actualizar_contenido(args.bd, args.id, respuestas=_leer_respuestas(args.respuestas))
+        elif args.comando == "listo":
+            cambiar_estado(args.bd, args.id, "listo")
+        elif args.comando == "mostrar":
+            print(json.dumps(leer(args.bd, args.id), ensure_ascii=False, indent=2))
+        elif args.comando == "aprobar":
+            aprobar(args.bd, args.id, args.huella)
+        elif args.comando == "historial":
+            print(json.dumps(historial(args.bd, args.id), ensure_ascii=False, indent=2))
+        else:
+            marcar_envio(
+                args.bd, args.id, args.comando.replace("-", "_"),
+                comprobante=getattr(args, "comprobante", None),
+            )
+    except (OSError, ValueError, sqlite3.Error) as error:
+        parser.exit(1, f"Error: {error}\n")
+
+
+if __name__ == "__main__":
+    main()
