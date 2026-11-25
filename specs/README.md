@@ -11,7 +11,7 @@ para que una persona o un agente de código (Codex, Claude Code u otro) pueda to
 | [002](002-bci-p0/spec.md) | P0: lector público de Bci y modelo genérico de oferta | done | P0 | 4 | — |
 | [003](003-latam-relay/spec.md) | Fichas de LATAM renderizadas vía relay en vivo | ready | P0 | 4 | 001 |
 | [004](004-bancochile-recorrido/spec.md) | Recorrido real de postulación en Banco de Chile (solo reconocimiento) | ready | P2 | 3 | — |
-| [005](005-candidatura-estados/spec.md) | Candidatura con estados y aprobación ligada a la huella del contenido | ready | P2 | 4 | 002 |
+| [005](005-candidatura-estados/spec.md) | Candidatura con estados y aprobación ligada a la huella del contenido | in-progress | P2 | 4 | 002 |
 | [006](006-vista-revision/spec.md) | Vista de revisión: PDF, respuestas y aprobar | ready | P1 · P2 | 4 | 005 |
 | [007](007-mas-fuentes/spec.md) | Más fuentes con cobertura medida | ready | P0 · P3 | 4 | 001, 002 |
 | [008](008-seguimiento-correo/spec.md) | Seguimiento por correo (opcional, solo lectura) | ready | P3 | 4 | 005 |
