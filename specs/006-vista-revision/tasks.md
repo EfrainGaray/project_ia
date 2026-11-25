@@ -3,7 +3,7 @@
 Requiere 005 integrada. Toma una tarea marcándola `[~] (agente: nombre)`; una tarea por PR; `[x]` solo con la evidencia
 del `check:` en la PR.
 
-- [ ] T001 Servidor local, `Host`, lista y página de candidatura de solo lectura, PDF con lista blanca — files:
+- [x] T001 Servidor local, `Host`, lista y página de candidatura de solo lectura, PDF con lista blanca — files:
   asistente/revision.py, tests/test_revision.py — check: AC1, AC5, AC6
 - [ ] T002 Aprobar con huella y token; pendientes deshabilitan — files: asistente/revision.py, tests/test_revision.py —
   check: AC2, AC3, AC4, AC8

@@ -1,6 +1,6 @@
 # 006 — Vista de revisión: PDF, respuestas y aprobar
 
-Status: ready | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 910e767
+Status: in-progress | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 910e767
 Request: "Vista de revisión (PDF + respuestas + aprobar)."
 Relates: REQUERIMIENTOS.md (flujo 2–4, P1 y P2, «Interfaz» en Decisiones técnicas), 005 (candidaturas y huella)
 
