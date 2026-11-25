@@ -16,6 +16,28 @@ from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
 from asistente import candidaturas
 
 PERFIL_DEMO = Path("demo/perfil.json")
+ESTILO = """
+:root { color-scheme: light dark; --fondo: #f4f6fa; --superficie: #fff; --texto: #182332;
+        --borde: #d0d9e4; --accion: #134a91; --aviso: #9b3219; }
+@media (prefers-color-scheme: dark) {
+  :root { --fondo: #111923; --superficie: #192534; --texto: #edf3fa;
+          --borde: #40536a; --accion: #a0c9ff; --aviso: #ffc2a8; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fondo); color: var(--texto); font: 1rem/1.5 system-ui, sans-serif; }
+main { max-width: 48rem; margin: auto; padding: 1.25rem clamp(1rem, 4vw, 2rem) 3rem;
+       overflow-wrap: anywhere; }
+section { background: var(--superficie); border: 1px solid var(--borde); padding: 1rem;
+          border-radius: .75rem; margin-block: 1rem; }
+h1, h2 { line-height: 1.2; margin-top: 0; }
+h2 { font-size: 1.2rem; }
+a { color: var(--accion); }
+[role=alert] { border-inline-start: .25rem solid var(--aviso); padding: .5rem; color: var(--aviso); }
+embed { display: block; border: 1px solid var(--borde); width: 100%; height: min(62vh, 34rem); }
+button, select { font: inherit; min-height: 2.75rem; max-width: 100%; margin-block: .25rem; }
+button { padding: .45rem .8rem; }
+button:enabled { cursor: pointer; }
+"""
 
 
 def _texto(valor: object) -> str:
@@ -57,7 +79,7 @@ class VistaRevision(BaseHTTPRequestHandler):
     def _pagina(self, titulo: str, contenido: str, codigo: HTTPStatus = HTTPStatus.OK) -> None:
         self._responder(f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>{_texto(titulo)}</title>
-</head><body><main>{contenido}</main></body></html>""".encode(), codigo)
+<style>{ESTILO}</style></head><body><main>{contenido}</main></body></html>""".encode(), codigo)
 
     def _host_local(self) -> bool:
         host = self.headers.get_all("Host", [])
@@ -90,7 +112,7 @@ class VistaRevision(BaseHTTPRequestHandler):
         if not self._host_local():
             return
         partes = urlsplit(self.path).path.split("/")
-        if len(partes) != 4 or partes[1] != "candidatura" or partes[3] != "aprobar":
+        if len(partes) != 4 or partes[1] != "candidatura" or partes[3] not in {"aprobar", "cv"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
@@ -109,7 +131,11 @@ class VistaRevision(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.FORBIDDEN)
             return
         try:
-            self._aprobar(identificador, campos.get("huella", [""])[0])
+            huella_vista = campos.get("huella", [""])[0]
+            if partes[3] == "aprobar":
+                self._aprobar(identificador, huella_vista)
+            else:
+                self._elegir_cv(identificador, campos.get("version", [""])[0], huella_vista)
         except (ValueError, OSError):
             self.send_error(HTTPStatus.NOT_FOUND)
         except sqlite3.Error:
@@ -136,6 +162,21 @@ class VistaRevision(BaseHTTPRequestHandler):
                     self._detalle(identificador, HTTPStatus.CONFLICT, aviso)
                     return
         self._detalle(identificador)
+
+    def _elegir_cv(self, identificador: int, version: str, huella_vista: str) -> None:
+        archivo = self.server.pdfs.get(version)
+        if archivo is None:
+            self._detalle(identificador, HTTPStatus.CONFLICT, "La versión del CV no está configurada.")
+            return
+        try:
+            candidaturas.elegir_cv(self.server.bd, identificador, version, archivo, huella_vista)
+        except (ValueError, OSError) as error:
+            aviso = "El PDF no está disponible." if isinstance(error, OSError) else str(error)
+            self._detalle(identificador, HTTPStatus.CONFLICT, aviso)
+            return
+        self.send_response(HTTPStatus.SEE_OTHER)
+        self.send_header("Location", f"/candidatura/{identificador}")
+        self.end_headers()
 
     def _lista(self) -> None:
         with closing(candidaturas._conectar(self.server.bd)) as db:
@@ -193,7 +234,10 @@ class VistaRevision(BaseHTTPRequestHandler):
             self._pdf(fila["cv_version"], consulta)
             pdf_disponible = True
             ruta = f'/pdf/{quote(fila["cv_version"], safe="")}?{urlencode(consulta, doseq=True)}'
-            pdf = f'<embed src="{_texto(ruta)}" type="application/pdf" title="Vista previa del CV">'
+            pdf = (
+                f'<embed src="{_texto(ruta)}" type="application/pdf" title="Vista previa del CV">'
+                f'<p><a href="{_texto(ruta)}" target="_blank" rel="noopener noreferrer">Abrir PDF</a></p>'
+            )
         except (OSError, ValueError):
             pdf = "<p>El PDF guardado falta o cambió. Actualiza la candidatura antes de aprobar.</p>"
         sin_descripcion = "<p>Oferta pendiente de descripción.</p>" if not oferta["descripcion"] else ""
@@ -205,16 +249,30 @@ class VistaRevision(BaseHTTPRequestHandler):
 <input type="hidden" name="token" value="{self.server.token}">
 <input type="hidden" name="huella" value="{_texto(fila["huella"])}">
 <button{deshabilitado}>Aprobar</button></form>"""
+        elegir = ""
+        if fila["estado"] in {"listo", "aprobado"}:
+            opciones = "".join(
+                f'<option value="{_texto(version)}">{_texto(version)}</option>'
+                for version in self.server.pdfs if version != fila["cv_version"]
+            )
+            if opciones:
+                elegir = f"""
+<form method="post" action="/candidatura/{identificador}/cv">
+<input type="hidden" name="token" value="{self.server.token}">
+<input type="hidden" name="huella" value="{_texto(fila["huella"])}">
+<label for="version">Otra versión del CV</label>
+<select id="version" name="version">{opciones}</select>
+<button>Cambiar CV</button></form>"""
         mensaje = f'<p role="alert">{_texto(aviso)}</p>' if aviso else ""
         self._pagina(fila["cargo"], f"""
 <p><a href="/">Candidaturas</a></p><h1>{_texto(fila["cargo"])}</h1>
 {mensaje}<p>{_texto(oferta["empresa"])} · {_texto(fila["estado"])}</p>
 <p>Oferta: {_texto(oferta["enlace"])}</p>{sin_descripcion}
 <p>Destino: {_texto(fila["destino"])}</p>
-<h2>Requisitos</h2><ul>{requisitos}</ul>
-<h2>CV</h2><p>{_texto(Path(fila["archivo"]).name)}</p>{pdf}
-<h2>Respuestas</h2><ul>{respuestas}</ul>
-<p>Huella <code>{_texto(fila["huella"])}</code></p>{aprobacion}""", codigo)
+<section><h2>Requisitos</h2><ul>{requisitos}</ul></section>
+<section><h2>CV</h2><p>{_texto(Path(fila["archivo"]).name)}</p>{pdf}{elegir}</section>
+<section><h2>Respuestas</h2><ul>{respuestas}</ul>
+<p>Huella <code>{_texto(fila["huella"])}</code></p>{aprobacion}</section>""", codigo)
 
 
 def main() -> None:

@@ -148,6 +148,23 @@ confirmada, usa `enviado 1 --comprobante FOLIO` (el comprobante es opcional).
 Si el resultado es incierto, usa `incierto 1`. Al verificar el resultado, usa
 `enviado 1` si se realizó o `no-enviado 1` si se confirma que no se realizó.
 
+### Revisar en el navegador
+
+Ejecuta este comando y abre la dirección local que imprime:
+
+```sh
+python3 -m asistente.revision
+```
+
+Abre una candidatura marcada como `listo` para revisar la oferta, las citas,
+las respuestas y el PDF. Si eliges otro CV, la vista registra la decisión,
+muestra el PDF seleccionado y vuelve a pedir aprobación cuando cambia el
+contenido. La aprobación queda registrada localmente en SQLite.
+
+`--bd RUTA` selecciona la misma base que usaste en la CLI. Usa `--perfil RUTA`
+para cargar el perfil con el que guardaste tu CV y `--puerto` para cambiar el
+puerto predeterminado de 8770. La aplicación se sirve en `127.0.0.1`.
+
 ## Relay de navegador
 
 La carpeta `relay/` contiene una extensión de Chrome y un servicio local para ejecutar recetas en el navegador

@@ -195,35 +195,76 @@ def actualizar_contenido(
     """Guarda el contenido y, si cambia su huella, vuelve a revisión."""
     with closing(_conectar(database)) as db, db:
         db.execute("BEGIN IMMEDIATE")
+        _actualizar_contenido(db, candidatura_id, destino, cargo, archivo, respuestas, decision_id)
+
+
+def _actualizar_contenido(
+    db: sqlite3.Connection,
+    candidatura_id: int,
+    destino: str | None = None,
+    cargo: str | None = None,
+    archivo: str | Path | None = None,
+    respuestas: dict[str, str] | None = None,
+    decision_id: int | None = None,
+) -> None:
+    fila = _fila(db, candidatura_id)
+    if fila["estado"] in {"enviado", "por_verificar"}:
+        raise ValueError(f"No se puede editar una candidatura en estado {fila['estado']}.")
+    pdf = Path(fila["archivo"]) if archivo is None else Path(archivo).resolve()
+    pdf_sha256 = _sha256_pdf(pdf)
+    cv_version = fila["cv_version"]
+    if decision_id is not None:
+        cv_version = _decision(db, decision_id, pdf, pdf_sha256)["cv_elegido"]
+    else:
+        decision_id = fila["decision_id"]
+        if str(pdf) != fila["archivo"]:
+            raise ValueError("Indica la decisión de CV para el nuevo archivo.")
+    destino = fila["destino"] if destino is None else destino
+    cargo = fila["cargo"] if cargo is None else cargo
+    respuestas_actuales = json.loads(fila["respuestas"]) if respuestas is None else respuestas
+    nueva_huella = huella(destino, cargo, pdf_sha256, respuestas_actuales)
+    db.execute("""
+        UPDATE candidaturas
+        SET destino = ?, cargo = ?, archivo = ?, pdf_sha256 = ?, respuestas = ?, huella = ?,
+            decision_id = ?, cv_version = ?
+        WHERE id = ?
+    """, (
+        destino, cargo, str(pdf), pdf_sha256, _json_canonico(respuestas_actuales), nueva_huella,
+        decision_id, cv_version, candidatura_id,
+    ))
+    cambio = nueva_huella != fila["huella"] or cv_version != fila["cv_version"]
+    if cambio and fila["estado"] in {"listo", "aprobado"}:
+        _registrar_transicion(
+            db, _fila(db, candidatura_id), "listo", motivo="Cambio de contenido",
+        )
+
+
+def elegir_cv(
+    database: str | Path, candidatura_id: int, version: str, archivo: Path, huella_vista: str,
+) -> None:
+    """Registra la elección y modifica la candidatura en la misma transacción."""
+    pdf = archivo.read_bytes()
+    if not pdf.startswith(b"%PDF-"):
+        raise ValueError("La versión no apunta a un PDF válido.")
+    sha256 = hashlib.sha256(pdf).hexdigest()
+    with closing(_conectar(database)) as db, db:
+        db.execute("BEGIN IMMEDIATE")
         fila = _fila(db, candidatura_id)
-        if fila["estado"] in {"enviado", "por_verificar"}:
-            raise ValueError(f"No se puede editar una candidatura en estado {fila['estado']}.")
-        pdf = Path(fila["archivo"]) if archivo is None else Path(archivo).resolve()
-        pdf_sha256 = _sha256_pdf(pdf)
-        cv_version = fila["cv_version"]
-        if decision_id is not None:
-            cv_version = _decision(db, decision_id, pdf, pdf_sha256)["cv_elegido"]
-        else:
-            decision_id = fila["decision_id"]
-            if str(pdf) != fila["archivo"]:
-                raise ValueError("Indica la decisión de CV para el nuevo archivo.")
-        destino = fila["destino"] if destino is None else destino
-        cargo = fila["cargo"] if cargo is None else cargo
-        respuestas_actuales = json.loads(fila["respuestas"]) if respuestas is None else respuestas
-        nueva_huella = huella(destino, cargo, pdf_sha256, respuestas_actuales)
-        db.execute("""
-            UPDATE candidaturas
-            SET destino = ?, cargo = ?, archivo = ?, pdf_sha256 = ?, respuestas = ?, huella = ?,
-                decision_id = ?, cv_version = ?
-            WHERE id = ?
-        """, (
-            destino, cargo, str(pdf), pdf_sha256, _json_canonico(respuestas_actuales), nueva_huella,
-            decision_id, cv_version, candidatura_id,
-        ))
-        if nueva_huella != fila["huella"] and fila["estado"] in {"listo", "aprobado"}:
-            _registrar_transicion(
-                db, _fila(db, candidatura_id), "listo", motivo="Cambio de contenido",
-            )
+        if fila["huella"] != huella_vista:
+            raise ValueError("El contenido cambió, revisa de nuevo.")
+        if fila["estado"] not in {"listo", "aprobado"}:
+            raise ValueError("La candidatura debe estar lista o aprobada para cambiar su CV.")
+        if (version, str(archivo), sha256) == (fila["cv_version"], fila["archivo"], fila["pdf_sha256"]):
+            return
+        nueva = db.execute("""
+            INSERT INTO decisiones
+                (modo, oferta, requisitos, cv_recomendado, cv_elegido, archivo, sha256, motivo)
+            SELECT modo, oferta, requisitos, cv_recomendado, ?, ?, ?, ?
+            FROM decisiones WHERE id = ?
+        """, (version, archivo.name, sha256, "Elección desde la vista", fila["decision_id"]))
+        if nueva.rowcount != 1 or nueva.lastrowid is None:
+            raise ValueError("No existe la decisión de CV anterior.")
+        _actualizar_contenido(db, candidatura_id, archivo=archivo, decision_id=nueva.lastrowid)
 
 
 def cambiar_estado(

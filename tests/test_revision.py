@@ -1,4 +1,6 @@
 import re
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from threading import Thread
 from urllib.error import HTTPError
@@ -122,3 +124,37 @@ def test_pendiente_bloquea_aprobacion(vista):
         _post(base, identificador, "aprobar", campos)
     assert error.value.code == 409
     assert candidaturas.leer(bd, identificador)["estado"] == "listo"
+
+
+def test_otro_cv_registra_decision_y_vuelve_a_listo(vista):
+    bd, identificador, base = vista
+    _, campos = _formulario(base, identificador)
+    with _post(base, identificador, "aprobar", campos):
+        pass
+    anterior = candidaturas.leer(bd, identificador)
+    _, campos = _formulario(base, identificador)
+    with _post(base, identificador, "cv", {**campos, "version": "automatizacion"}) as respuesta:
+        assert "automatizacion.pdf" in respuesta.read().decode()
+    fila = candidaturas.leer(bd, identificador)
+    assert fila["estado"] == "listo"
+    assert fila["huella"] != anterior["huella"]
+    assert fila["cv_version"] == "automatizacion"
+    assert fila["decision_id"] != anterior["decision_id"]
+    with closing(sqlite3.connect(bd)) as db:
+        assert db.execute(
+            "SELECT cv_recomendado, cv_elegido, archivo FROM decisiones WHERE id=?",
+            (fila["decision_id"],),
+        ).fetchone() == ("datos", "automatizacion", "automatizacion.pdf")
+    with pytest.raises(HTTPError) as error:
+        _post(base, identificador, "cv", {**campos, "version": "datos"})
+    assert error.value.code == 409
+
+
+def test_otro_cv_invalido_no_crea_decision(vista):
+    bd, identificador, base = vista
+    _, campos = _formulario(base, identificador)
+    with pytest.raises(HTTPError) as error:
+        _post(base, identificador, "cv", {**campos, "version": "../../etc/passwd"})
+    assert error.value.code == 409
+    with closing(sqlite3.connect(bd)) as db:
+        assert db.execute("SELECT COUNT(*) FROM decisiones").fetchone()[0] == 1

@@ -7,7 +7,7 @@ del `check:` en la PR.
   asistente/revision.py, tests/test_revision.py — check: AC1, AC5, AC6
 - [x] T002 Aprobar con huella y token; pendientes deshabilitan — files: asistente/revision.py, tests/test_revision.py —
   check: AC2, AC3, AC4, AC8
-- [ ] T003 Elegir otro CV desde la vista; claro/oscuro y móvil; documentación — files: asistente/revision.py,
+- [x] T003 Elegir otro CV desde la vista; claro/oscuro y móvil; documentación — files: asistente/revision.py,
   tests/test_revision.py, README.md, REQUERIMIENTOS.md — check: AC7, AC9
 
 | AC | Task |
