@@ -91,7 +91,7 @@ Toma una tarea marcándola `[~] (agente: nombre)`; una tarea por PR; `[x]` solo 
 - [x] T001 Lectura de archivos privados, cobertura y extracción — files: asistente/evaluacion.py,
   tests/test_evaluacion.py — check: AC1, AC2, AC6
 - [ ] T002 Tiempo de preparación (requiere 005) — files: asistente/evaluacion.py, tests/test_evaluacion.py — check: AC3
-- [ ] T003 Ranking por reglas vs Naive Bayes con muestra reservada — files: asistente/evaluacion.py,
+- [x] T003 Ranking por reglas vs Naive Bayes con muestra reservada — files: asistente/evaluacion.py,
   tests/test_evaluacion.py — check: AC4, AC5
 - [ ] T004 Primer reporte real con Ayelén y documentación — files: specs/009-evaluacion/spec.md, README.md — check: AC7
 

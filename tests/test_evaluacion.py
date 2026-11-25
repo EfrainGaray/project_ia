@@ -81,3 +81,59 @@ def test_sin_archivos_explica_y_sale_bien(tmp_path, capsys):
     salida = capsys.readouterr().out
     assert "revision.jsonl" in salida and "interes.jsonl" in salida
     assert not carpeta.exists()
+
+
+def etiquetar(tmp_path, cantidad, interesa_cada=2):
+    """Ofertas ficticias detectadas un día distinto cada una; las de datos interesan, las de ventas no."""
+    bd = tmp_path / "ranking.sqlite3"
+    etiquetas = []
+    for i in range(cantidad):
+        interesa = i % interesa_cada == 0
+        descripcion = "Requisitos\n" + ("Python y SQL para datos" if interesa else "Ventas en terreno")
+        ofertas.guardar(bd, [{**BASE, "fuente": "bci", "id_origen": str(i), "descripcion": descripcion,
+                              "cargo": "Analista de datos" if interesa else "Ejecutivo comercial"}],
+                        momento=f"2026-{1 + i // 28:02d}-{1 + i % 28:02d}T10:00:00+00:00")
+        etiquetas.append({"fuente": "bci", "id_origen": str(i), "interes": "sí" if interesa else "no"})
+    etiquetas.append({"fuente": "bci", "id_origen": "no-existe", "interes": "sí"})
+    carpeta = tmp_path / "evaluacion"
+    carpeta.mkdir()
+    texto = "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in etiquetas)
+    (carpeta / "interes.jsonl").write_text(texto, encoding="utf-8")
+    return bd, carpeta
+
+
+PERFIL = {"señales": {"python": {"palabras": ["python"], "respaldo": True}}}
+
+
+def test_ranking_muestra_reservada_no_entrena(tmp_path, monkeypatch):
+    bd, carpeta = etiquetar(tmp_path, 80)
+    vistas: list[str] = []
+    original = evaluacion.entrenar_bayes
+
+    def espiar(entrenamiento):
+        vistas.extend(f"{oferta['fuente']}:{oferta['id_origen']}" for oferta, _ in entrenamiento)
+        return original(entrenamiento)
+
+    monkeypatch.setattr(evaluacion, "entrenar_bayes", espiar)
+    ranking = evaluacion.evaluar(bd, carpeta, perfil=PERFIL)["ranking"]
+    assert ranking["suficiente"] and ranking["sin_oferta"] == 1
+    assert ranking["entrenamiento"] == 60 and len(ranking["reservada"]) == 20
+    assert not set(vistas) & set(ranking["reservada"])
+    numero = lambda clave: int(clave.split(":")[1])  # noqa: E731
+    assert min(map(numero, ranking["reservada"])) > max(map(numero, vistas))
+    for metodo in ("reglas", "modelo"):
+        assert ranking[metodo] == {"precision_5": 1.0, "interesa_top5": 5}
+
+
+def test_ranking_insuficientes_no_entrena(tmp_path, monkeypatch):
+    bd, carpeta = etiquetar(tmp_path, 20)
+
+    def no_entrenar(entrenamiento):
+        raise AssertionError("no debe entrenar")
+
+    monkeypatch.setattr(evaluacion, "entrenar_bayes", no_entrenar)
+    ranking = evaluacion.evaluar(bd, carpeta, perfil=PERFIL)["ranking"]
+    assert ranking == {"suficiente": False, "etiquetas": 20, "sin_oferta": 1, "faltan": 40,
+                       "faltan_interesa": 5, "faltan_no_interesa": 5}
+    texto = evaluacion.formatear(evaluacion.evaluar(bd, carpeta, perfil=PERFIL), "2026-11-25")
+    assert "faltan 40 etiquetas" in texto
