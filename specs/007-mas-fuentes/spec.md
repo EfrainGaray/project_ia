@@ -1,6 +1,6 @@
 # 007 — Más fuentes con cobertura medida
 
-Status: ready | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 910e767
+Status: in-progress | Phase: solid | Domain: code | Created: 2026-11-24 | Base commit: 910e767
 Request: "Más fuentes (Itaú vía relay, Banco de Chile, SKY, Caja Los Andes, Coopeuch) con cobertura medida."
 Relates: REQUERIMIENTOS.md (flujo 1, P0 y P3, «Fuentes» en Decisiones técnicas, pregunta 1), 001 (relay), 002 (modelo
 común), 003 (calibrar recetas)
