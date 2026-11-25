@@ -79,6 +79,20 @@ def _sha256_pdf(archivo: Path) -> str:
         raise ValueError("No se pudo leer el PDF de la candidatura.") from error
 
 
+def _decision(db: sqlite3.Connection, decision_id: int, pdf: Path, pdf_sha256: str) -> sqlite3.Row:
+    existe_tabla = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'decisiones'"
+    ).fetchone()
+    decision = db.execute(
+        "SELECT cv_elegido, archivo, sha256 FROM decisiones WHERE id = ?", (decision_id,),
+    ).fetchone() if existe_tabla else None
+    if decision is None:
+        raise ValueError("No existe la decisión de CV indicada.")
+    if (pdf.name, pdf_sha256) != (decision["archivo"], decision["sha256"]):
+        raise ValueError("El PDF no coincide con el registrado en la decisión de CV.")
+    return decision
+
+
 def crear(
     database: str | Path,
     fuente: str,
@@ -99,16 +113,7 @@ def crear(
         ).fetchone()
         if oferta is None:
             raise ValueError("No existe la oferta indicada.")
-        existe_tabla = db.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'decisiones'"
-        ).fetchone()
-        decision = db.execute(
-            "SELECT cv_elegido, archivo, sha256 FROM decisiones WHERE id = ?", (decision_id,),
-        ).fetchone() if existe_tabla else None
-        if decision is None:
-            raise ValueError("No existe la decisión de CV indicada.")
-        if (pdf.name, pdf_sha256) != (decision["archivo"], decision["sha256"]):
-            raise ValueError("El PDF no coincide con el registrado en la decisión de CV.")
+        decision = _decision(db, decision_id, pdf, pdf_sha256)
         destino, cargo = oferta["enlace"], oferta["cargo"]
         resultado = db.execute("""
             INSERT INTO candidaturas (
@@ -132,11 +137,92 @@ def _fila(db: sqlite3.Connection, candidatura_id: int) -> sqlite3.Row:
     return fila
 
 
+def _pendientes(respuestas: dict[str, str]) -> list[str]:
+    return sorted(
+        campo for campo, respuesta in respuestas.items()
+        if not respuesta.strip() or "{pendiente}" in respuesta.casefold()
+    )
+
+
 def leer(database: str | Path, candidatura_id: int) -> dict:
     with closing(_conectar(database)) as db:
         candidatura = dict(_fila(db, candidatura_id))
     candidatura["respuestas"] = json.loads(candidatura["respuestas"])
+    candidatura["pendientes"] = _pendientes(candidatura["respuestas"])
     return candidatura
+
+
+def _registrar_transicion(
+    db: sqlite3.Connection,
+    fila: sqlite3.Row,
+    nuevo_estado: str,
+    *,
+    motivo: str,
+    comprobante: str | None = None,
+) -> None:
+    anterior = fila["estado"]
+    if nuevo_estado not in TRANSICIONES[anterior]:
+        raise ValueError(f"Transición no permitida: {anterior} → {nuevo_estado}.")
+    fecha = ofertas.ahora()
+    aprobada_en = fila["aprobada_en"]
+    if nuevo_estado == "listo":
+        aprobada_en = None
+    elif anterior == "listo":
+        aprobada_en = fecha
+    enviada_en = fecha if nuevo_estado == "enviado" else None
+    db.execute("""
+        UPDATE candidaturas SET estado = ?, aprobada_en = ?, enviada_en = ?, comprobante = ?
+        WHERE id = ?
+    """, (nuevo_estado, aprobada_en, enviada_en, comprobante if enviada_en else None, fila["id"]))
+    db.execute("""
+        INSERT INTO candidatura_eventos (
+            candidatura_id, estado_anterior, estado_nuevo, fecha, huella, motivo
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    """, (fila["id"], anterior, nuevo_estado, fecha, fila["huella"], motivo))
+
+
+def actualizar_contenido(
+    database: str | Path,
+    candidatura_id: int,
+    *,
+    destino: str | None = None,
+    cargo: str | None = None,
+    archivo: str | Path | None = None,
+    respuestas: dict[str, str] | None = None,
+    decision_id: int | None = None,
+) -> None:
+    """Guarda el contenido y, si cambia su huella, vuelve a revisión."""
+    with closing(_conectar(database)) as db, db:
+        db.execute("BEGIN IMMEDIATE")
+        fila = _fila(db, candidatura_id)
+        if fila["estado"] in {"enviado", "por_verificar"}:
+            raise ValueError(f"No se puede editar una candidatura en estado {fila['estado']}.")
+        pdf = Path(fila["archivo"]) if archivo is None else Path(archivo).resolve()
+        pdf_sha256 = _sha256_pdf(pdf)
+        cv_version = fila["cv_version"]
+        if decision_id is not None:
+            cv_version = _decision(db, decision_id, pdf, pdf_sha256)["cv_elegido"]
+        else:
+            decision_id = fila["decision_id"]
+            if str(pdf) != fila["archivo"]:
+                raise ValueError("Indica la decisión de CV para el nuevo archivo.")
+        destino = fila["destino"] if destino is None else destino
+        cargo = fila["cargo"] if cargo is None else cargo
+        respuestas_actuales = json.loads(fila["respuestas"]) if respuestas is None else respuestas
+        nueva_huella = huella(destino, cargo, pdf_sha256, respuestas_actuales)
+        db.execute("""
+            UPDATE candidaturas
+            SET destino = ?, cargo = ?, archivo = ?, pdf_sha256 = ?, respuestas = ?, huella = ?,
+                decision_id = ?, cv_version = ?
+            WHERE id = ?
+        """, (
+            destino, cargo, str(pdf), pdf_sha256, _json_canonico(respuestas_actuales), nueva_huella,
+            decision_id, cv_version, candidatura_id,
+        ))
+        if nueva_huella != fila["huella"] and fila["estado"] in {"listo", "aprobado"}:
+            _registrar_transicion(
+                db, _fila(db, candidatura_id), "listo", motivo="Cambio de contenido",
+            )
 
 
 def cambiar_estado(
@@ -157,27 +243,36 @@ def cambiar_estado(
             raise ValueError(f"Transición no permitida: {anterior} → {nuevo_estado}.")
         if nuevo_estado == "listo" and anterior != "borrador":
             raise ValueError("Transición a listo reservada para cambios de contenido.")
-        if anterior == "listo":
-            if huella_vista != fila["huella"]:
-                raise ValueError("La huella de aprobación no coincide con la candidatura.")
+        if anterior == "listo" and huella_vista != fila["huella"]:
+            raise ValueError("La huella de aprobación no coincide con la candidatura.")
+        if nuevo_estado == "listo" or anterior == "listo":
+            pendientes = _pendientes(json.loads(fila["respuestas"]))
+            if pendientes:
+                raise ValueError(f"Respuestas pendientes: {', '.join(pendientes)}.")
         if anterior in {"listo", "aprobado"}:
             if _sha256_pdf(Path(fila["archivo"])) != fila["pdf_sha256"]:
                 raise ValueError("El PDF cambió desde que se guardó la candidatura.")
-
-        fecha = ofertas.ahora()
-        aprobada_en = fecha if anterior == "listo" else fila["aprobada_en"]
-        enviada_en = fecha if nuevo_estado == "enviado" else None
-        db.execute("""
-            UPDATE candidaturas SET estado = ?, aprobada_en = ?, enviada_en = ?, comprobante = ?
-            WHERE id = ?
-        """, (nuevo_estado, aprobada_en, enviada_en, comprobante if enviada_en else None, candidatura_id))
-        db.execute("""
-            INSERT INTO candidatura_eventos (
-                candidatura_id, estado_anterior, estado_nuevo, fecha, huella, motivo
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (candidatura_id, anterior, nuevo_estado, fecha, fila["huella"], motivo or nuevo_estado))
+        _registrar_transicion(
+            db, fila, nuevo_estado, motivo=motivo or nuevo_estado, comprobante=comprobante,
+        )
 
 
 def aprobar(database: str | Path, candidatura_id: int, huella_vista: str) -> None:
     cambiar_estado(database, candidatura_id, "aprobado", huella_vista=huella_vista, motivo="Aprobación")
+
+
+def marcar_envio(
+    database: str | Path,
+    candidatura_id: int,
+    resultado: str,
+    *,
+    comprobante: str | None = None,
+) -> None:
+    """Registra un resultado observado. En por_verificar solo se resuelve el intento previo."""
+    estados = {"enviado": "enviado", "incierto": "por_verificar", "no_enviado": "aprobado"}
+    if resultado not in estados:
+        raise ValueError(f"Resultado de envío desconocido: {resultado}.")
+    cambiar_estado(
+        database, candidatura_id, estados[resultado],
+        motivo=f"Resultado de envío: {resultado}", comprobante=comprobante,
+    )
