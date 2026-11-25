@@ -76,6 +76,9 @@ también se informa cuántos «me interesa» quedan en el top 5 de cada método.
   pendientes de descripción cuentan como «sin oferta».
 
 ## Change log
+- 2026-11-25 (T002): 005 no registra un evento de creación en `candidatura_eventos`, así que el inicio es la fecha de
+  la decisión de CV que abre la candidatura (`decisiones.fecha`, UTC) y el fin, el primer evento `aprobado`. Si se
+  prefiere un evento de creación explícito, va en 005.
 
 ## Verify
 Verdict: pending.
@@ -90,7 +93,7 @@ Toma una tarea marcándola `[~] (agente: nombre)`; una tarea por PR; `[x]` solo 
 
 - [x] T001 Lectura de archivos privados, cobertura y extracción — files: asistente/evaluacion.py,
   tests/test_evaluacion.py — check: AC1, AC2, AC6
-- [ ] T002 Tiempo de preparación (requiere 005) — files: asistente/evaluacion.py, tests/test_evaluacion.py — check: AC3
+- [x] T002 Tiempo de preparación (requiere 005) — files: asistente/evaluacion.py, tests/test_evaluacion.py — check: AC3
 - [x] T003 Ranking por reglas vs Naive Bayes con muestra reservada — files: asistente/evaluacion.py,
   tests/test_evaluacion.py — check: AC4, AC5
 - [ ] T004 Primer reporte real con Ayelén y documentación — files: specs/009-evaluacion/spec.md, README.md — check: AC7

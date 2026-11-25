@@ -1,5 +1,6 @@
-"""Reporte de evaluación: cobertura por fuente, calidad de la extracción contra una revisión manual y
-orden por reglas frente a un Naive Bayes entrenado con las etiquetas de interés.
+"""Reporte de evaluación: cobertura por fuente, calidad de la extracción contra una revisión manual,
+tiempo de preparación de las candidaturas y orden por reglas frente a un Naive Bayes entrenado con las
+etiquetas de interés.
 
 Lee los archivos privados de `privado/evaluacion/` (fuera del repositorio) y solo lee la base.
 """
@@ -8,8 +9,10 @@ import argparse
 import json
 import math
 import re
+import statistics
 from collections import Counter
-from datetime import date
+from contextlib import closing
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from asistente import cobertura, ofertas, reglas
@@ -75,6 +78,36 @@ def medir_extraccion(bd, revisiones, perfil):
     for clave in ("omitidos", "tipo_incorrecto", "sin_evidencia"):
         totales[clave] = sum(len(ficha[clave]) for ficha in fichas)
     return {"fichas": fichas, "totales": totales}
+
+
+TIEMPOS = """
+    SELECT c.fuente, d.fecha AS inicio, MIN(e.fecha) AS aprobada
+    FROM candidaturas c
+    JOIN decisiones d ON d.id = c.decision_id
+    JOIN candidatura_eventos e ON e.candidatura_id = c.id AND e.estado_nuevo = 'aprobado'
+    GROUP BY c.id
+"""
+
+
+def _momento(texto):
+    momento = datetime.fromisoformat(texto)
+    return momento if momento.tzinfo else momento.replace(tzinfo=timezone.utc)  # CURRENT_TIMESTAMP es UTC
+
+
+def medir_tiempo(bd):
+    """Mediana por fuente desde la decisión de CV que abre la candidatura hasta su primera aprobación."""
+    with closing(ofertas.conectar(bd)) as db:
+        tablas = {fila[0] for fila in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if not {"candidaturas", "candidatura_eventos", "decisiones"} <= tablas:
+            return []
+        filas = db.execute(TIEMPOS).fetchall()
+    por_fuente: dict[str, list[float]] = {}
+    for fuente, inicio, aprobada in filas:
+        minutos = (_momento(aprobada) - _momento(inicio)).total_seconds() / 60
+        por_fuente.setdefault(fuente, []).append(minutos)
+    return [{"fuente": fuente, "candidaturas": len(minutos),
+             "mediana_minutos": round(statistics.median(minutos))}
+            for fuente, minutos in sorted(por_fuente.items())]
 
 
 MINIMO_ETIQUETAS = 60
@@ -154,6 +187,7 @@ def evaluar(bd, carpeta, perfil):
     return {
         "cobertura": medir_cobertura(bd),
         "extraccion": None if revisiones is None else medir_extraccion(bd, revisiones, perfil),
+        "tiempo": medir_tiempo(bd),
         "ranking": None if etiquetas is None else medir_ranking(bd, etiquetas, perfil),
     }
 
@@ -178,6 +212,12 @@ def formatear(reporte, dia):
             lineas.append(f"- {ficha['fuente']}:{ficha['id_origen']} · {len(ficha['omitidos'])} omitidos · "
                           f"{len(ficha['tipo_incorrecto'])} con tipo incorrecto · "
                           f"{len(ficha['sin_evidencia'])} sin evidencia")
+    lineas += ["", "## Tiempo de preparación (decisión de CV → aprobación)"]
+    if not reporte["tiempo"]:
+        lineas.append("Sin candidaturas aprobadas.")
+    for fila in reporte["tiempo"]:
+        lineas.append(f"- {fila['fuente']} · {fila['candidaturas']} candidaturas aprobadas · "
+                      f"mediana {fila['mediana_minutos']} min")
     lineas += ["", "## Ranking: reglas frente a modelo aprendido"]
     ranking = reporte["ranking"]
     if ranking is None:

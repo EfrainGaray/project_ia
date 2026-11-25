@@ -1,4 +1,5 @@
 import json
+import sqlite3
 
 from asistente import evaluacion, ofertas
 
@@ -137,3 +138,39 @@ def test_ranking_insuficientes_no_entrena(tmp_path, monkeypatch):
                        "faltan_interesa": 5, "faltan_no_interesa": 5}
     texto = evaluacion.formatear(evaluacion.evaluar(bd, carpeta, perfil=PERFIL), "2026-11-25")
     assert "faltan 40 etiquetas" in texto
+
+
+def test_tiempo_mediana_por_fuente(tmp_path):
+    from app import record
+    from asistente import candidaturas
+
+    bd = tmp_path / "tiempo.sqlite3"
+    pdf = tmp_path / "datos.pdf"
+    pdf.write_bytes(b"%PDF-1.4 ejemplo ficticio")
+    minutos = {("bci", "1"): 30, ("bci", "2"): 90, ("bci", "3"): 600, ("itau", "1"): 60, ("bci", "4"): None}
+    for (fuente, id_origen), demora in minutos.items():
+        ofertas.guardar(bd, [{**BASE, "fuente": fuente, "id_origen": id_origen}])
+        decision = record(bd, "reglas", "Analista", [], "datos", "datos", pdf, "Ejemplo")
+        identificador = candidaturas.crear(bd, fuente, id_origen, decision, pdf, {})
+        candidaturas.cambiar_estado(bd, identificador, "listo")
+        with sqlite3.connect(bd) as db:
+            db.execute("UPDATE decisiones SET fecha = '2026-11-24 10:00:00' WHERE id = ?", (decision,))
+        if demora is None:
+            continue
+        candidaturas.aprobar(bd, identificador, candidaturas.leer(bd, identificador)["huella"])
+        aprobada = f"2026-11-24T{10 + demora // 60:02d}:{demora % 60:02d}:00+00:00"
+        with sqlite3.connect(bd) as db:
+            db.execute("UPDATE candidatura_eventos SET fecha = ? WHERE candidatura_id = ? AND estado_nuevo = "
+                       "'aprobado'", (aprobada, identificador))
+    tiempo = evaluacion.evaluar(bd, tmp_path, perfil={})["tiempo"]
+    assert tiempo == [
+        {"fuente": "bci", "candidaturas": 3, "mediana_minutos": 90},
+        {"fuente": "itau", "candidaturas": 1, "mediana_minutos": 60},
+    ]
+    assert "bci · 3 candidaturas aprobadas · mediana 90 min" in evaluacion.formatear(
+        evaluacion.evaluar(bd, tmp_path, perfil={}), "2026-11-25")
+
+
+def test_tiempo_sin_candidaturas(tmp_path):
+    bd, carpeta = preparar(tmp_path)
+    assert evaluacion.evaluar(bd, carpeta, perfil={})["tiempo"] == []
