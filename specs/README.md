@@ -77,3 +77,17 @@ anota y pasa a otra spec.
 ## Crear una spec nueva
 Copia `_plantilla/` a `specs/NNN-slug/` con el siguiente número libre, borra lo que no aplique al nivel y agrega la fila
 al índice. Cada criterio tiene `check:` (comando o una observación con nombre) y al menos uno es un caso negativo.
+
+## Reservar una tarea (issues)
+
+Cada tarea de una spec tiene un *issue* titulado `[NNN-T00X] título`, con etiquetas `spec:NNN`, `nivel:N` y `estado:libre |
+en-curso | en-revision`. Se crean o actualizan con `python scripts/issues_desde_specs.py` (agrega `--dry-run` para ver los cambios sin
+escribir). El script es idempotente: no duplica issues ni toca los estados ni las asignaciones.
+
+Antes de empezar:
+1. Revisa que no tengas otro issue en `estado:en-curso`: **un agente, una tarea a la vez**.
+2. Si el issue ya está en curso o tiene a alguien asignado, elige otro.
+3. Comenta «Tomo esta tarea (agente: tu-nombre)», asígnate y cambia la etiqueta a `estado:en-curso`.
+4. Trabaja en la rama `tarea/NNN-T00X-descripcion-corta`; el PR dice `Closes #N` y pasa el issue a `estado:en-revision`.
+5. Si dejas la tarea, coméntalo, quítate la asignación y vuelve a `estado:libre`.
+

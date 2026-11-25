@@ -9,6 +9,19 @@ y apruebe.
 - Abre o comenta un *issue* con lo que quieres hacer. Para fuentes nuevas, envío de postulaciones o datos personales, acuerda el enfoque
   antes de escribir código.
 
+## Reservar una tarea (issues)
+
+Cada tarea de una spec tiene un *issue* titulado `[NNN-T00X] título`, con etiquetas `spec:NNN`, `nivel:N` y `estado:libre |
+en-curso | en-revision`. Se crean o actualizan con `python scripts/issues_desde_specs.py` (agrega `--dry-run` para ver los cambios sin
+escribir). El script es idempotente: no duplica issues ni toca los estados ni las asignaciones.
+
+Antes de empezar:
+1. Revisa que no tengas otro issue en `estado:en-curso`: **un agente, una tarea a la vez**.
+2. Si el issue ya está en curso o tiene a alguien asignado, elige otro.
+3. Comenta «Tomo esta tarea (agente: tu-nombre)», asígnate y cambia la etiqueta a `estado:en-curso`.
+4. Trabaja en la rama `tarea/NNN-T00X-descripcion-corta`; el PR dice `Closes #N` y pasa el issue a `estado:en-revision`.
+5. Si dejas la tarea, coméntalo, quítate la asignación y vuelve a `estado:libre`.
+
 ## Flujo de trabajo
 1. Haz un *fork* y crea una rama desde `main` con un nombre descriptivo: `feat/p0-bci`, `fix/itau-fecha`, `docs/requerimientos`.
 2. Elige el nivel de proceso según el tamaño del cambio (ver `AGENTS.md`): un arreglo de texto va directo; un error empieza con una

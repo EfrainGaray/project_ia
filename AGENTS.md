@@ -25,3 +25,17 @@ Lee primero `README.md` y `REQUERIMIENTOS.md` (historia de usuario, criterios de
 - Lectores de portales: respetar `robots.txt` y términos de uso, ritmo limitado, detenerse y mostrar el código si el portal rechaza.
   No evadir bloqueos ni detección de bots.
 - Una cita del aviso siempre es literal; una recomendación de CV nunca certifica que se cumplan los requisitos.
+
+## Reservar una tarea (issues)
+
+Cada tarea de una spec tiene un *issue* titulado `[NNN-T00X] título`, con etiquetas `spec:NNN`, `nivel:N` y `estado:libre |
+en-curso | en-revision`. Se crean o actualizan con `python scripts/issues_desde_specs.py` (agrega `--dry-run` para ver los cambios sin
+escribir). El script es idempotente: no duplica issues ni toca los estados ni las asignaciones.
+
+Antes de empezar:
+1. Revisa que no tengas otro issue en `estado:en-curso`: **un agente, una tarea a la vez**.
+2. Si el issue ya está en curso o tiene a alguien asignado, elige otro.
+3. Comenta «Tomo esta tarea (agente: tu-nombre)», asígnate y cambia la etiqueta a `estado:en-curso`.
+4. Trabaja en la rama `tarea/NNN-T00X-descripcion-corta`; el PR dice `Closes #N` y pasa el issue a `estado:en-revision`.
+5. Si dejas la tarea, coméntalo, quítate la asignación y vuelve a `estado:libre`.
+
