@@ -158,3 +158,25 @@ def test_otro_cv_invalido_no_crea_decision(vista):
     assert error.value.code == 409
     with closing(sqlite3.connect(bd)) as db:
         assert db.execute("SELECT COUNT(*) FROM decisiones").fetchone()[0] == 1
+
+
+def test_demo_crea_candidatura_lista_con_pdf_y_evidencia(tmp_path):
+    bd = tmp_path / "demo.sqlite3"
+    identificador = revision._crear_demo(bd)
+    fila = candidaturas.leer(bd, identificador)
+    assert (fila["fuente"], fila["estado"]) == ("demo", "listo")
+    assert fila["pendientes"] == []
+
+    with revision.servidor(bd, 0, revision.PERFIL_DEMO) as servidor:
+        hilo = Thread(target=servidor.serve_forever)
+        hilo.start()
+        try:
+            base = f"http://127.0.0.1:{servidor.server_port}"
+            html, campos = _formulario(base, identificador)
+            assert "Analista" in html and "Python" in html and "datos.pdf" in html
+            with _post(base, identificador, "aprobar", campos):
+                pass
+            assert candidaturas.leer(bd, identificador)["estado"] == "aprobado"
+        finally:
+            servidor.shutdown()
+            hilo.join()

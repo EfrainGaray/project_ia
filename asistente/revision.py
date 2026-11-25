@@ -11,11 +11,13 @@ from html import escape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
 
-from asistente import candidaturas
+from app import DEMO, read_json, recommend, record
+from asistente import candidaturas, ofertas, reglas
 
-PERFIL_DEMO = Path("demo/perfil.json")
+PERFIL_DEMO = DEMO / "perfil.json"
 ESTILO = """
 :root { color-scheme: light dark; --fondo: #f4f6fa; --superficie: #fff; --texto: #182332;
         --borde: #d0d9e4; --accion: #134a91; --aviso: #9b3219; }
@@ -186,7 +188,11 @@ class VistaRevision(BaseHTTPRequestHandler):
             f' · {_texto(fila["estado"])}</li>'
             for fila in filas
         )
-        contenido = f"<ul>{enlaces}</ul>" if enlaces else "<p>Sin candidaturas guardadas.</p>"
+        contenido = f"<ul>{enlaces}</ul>" if enlaces else """
+<p>Esta base todavía no tiene candidaturas.
+Las ofertas importadas aparecen aquí después de crear una candidatura.</p>
+<p>Si ya creaste una, inicia la vista con <code>--bd RUTA</code> y apunta a esa misma base.</p>
+<p>Para probar con un ejemplo ficticio, reinicia con <code>python3 -m asistente.revision --demo</code>.</p>"""
         self._pagina("Candidaturas", f"<h1>Candidaturas</h1>{contenido}")
 
     def _pdf(self, version: str, consulta: dict[str, list[str]]) -> bytes:
@@ -275,17 +281,49 @@ class VistaRevision(BaseHTTPRequestHandler):
 <p>Huella <code>{_texto(fila["huella"])}</code></p>{aprobacion}</section>""", codigo)
 
 
+def _crear_demo(bd: Path) -> int:
+    cargo = "Analista de datos (demo)"
+    descripcion = "Requisitos\nExperiencia con Python.\nExperiencia en análisis de datos."
+    ofertas.guardar(bd, [{
+        "fuente": "demo", "id_origen": "1", "empresa": "Banco ficticio", "cargo": cargo,
+        "enlace": "https://example.org/oferta-demo", "descripcion": descripcion,
+    }])
+    perfil = read_json(PERFIL_DEMO)
+    requisitos = reglas.extraer(descripcion, perfil)
+    recomendacion, _ = recommend(requisitos, perfil["versiones"])
+    pdf = PERFIL_DEMO.parent / perfil["versiones"]["datos"]["pdf"]
+    decision = record(bd, "reglas", descripcion, requisitos, recomendacion, "datos", pdf, "Demo ficticia")
+    identificador = candidaturas.crear(
+        bd, "demo", "1", decision, pdf, {"Motivación": "Me interesa automatizar análisis con Python."},
+    )
+    candidaturas.cambiar_estado(bd, identificador, "listo")
+    return identificador
+
+
+def _servir(bd: Path, puerto: int, perfil: Path) -> None:
+    with servidor(bd, puerto, perfil) as vista:
+        print(f"http://127.0.0.1:{vista.server_port}", flush=True)
+        vista.serve_forever()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Abre la vista local de candidaturas.")
-    parser.add_argument("--bd", type=Path, default=Path("postulaciones.sqlite3"))
+    parser.add_argument("--bd", type=Path)
+    parser.add_argument("--demo", action="store_true", help="Carga una candidatura ficticia temporal.")
     parser.add_argument("--puerto", type=int, default=8770)
-    parser.add_argument("--perfil", type=Path, default=PERFIL_DEMO)
+    parser.add_argument("--perfil", type=Path)
     args = parser.parse_args()
+    if args.demo and (args.bd is not None or args.perfil is not None):
+        parser.error("La demo usa una base temporal y el perfil ficticio.")
     try:
-        with servidor(args.bd, args.puerto, args.perfil) as vista:
-            print(f"http://127.0.0.1:{vista.server_port}", flush=True)
-            vista.serve_forever()
-    except (OSError, ValueError) as error:
+        if args.demo:
+            with TemporaryDirectory(prefix="candidaturas-demo-") as temporal:
+                bd = Path(temporal) / "demo.sqlite3"
+                _crear_demo(bd)
+                _servir(bd, args.puerto, PERFIL_DEMO)
+        else:
+            _servir(args.bd or Path("postulaciones.sqlite3"), args.puerto, args.perfil or PERFIL_DEMO)
+    except (OSError, ValueError, sqlite3.Error) as error:
         parser.exit(1, f"Error: {error}\n")
     except KeyboardInterrupt:
         pass

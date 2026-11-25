@@ -156,6 +156,14 @@ Ejecuta este comando y abre la dirección local que imprime:
 python3 -m asistente.revision
 ```
 
+Para practicar desde cero, ejecuta `python3 -m asistente.revision --demo`.
+Verás una candidatura ficticia lista para revisar. Los cambios quedan en una
+base temporal que se elimina al cerrar la demo. Usa `--puerto 8771` si ya
+tienes otra instancia abierta.
+
+La vista normal lista las candidaturas de la base indicada. Las ofertas
+importadas aparecen después de preparar una candidatura con `crear`.
+
 Abre una candidatura marcada como `listo` para revisar la oferta, las citas,
 las respuestas y el PDF. Si eliges otro CV, la vista registra la decisión,
 muestra el PDF seleccionado y vuelve a pedir aprobación cuando cambia el
