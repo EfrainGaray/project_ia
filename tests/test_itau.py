@@ -68,4 +68,40 @@ def test_importing_twice_keeps_one_row_and_existing_description(tmp_path):
     assert itau.save(db, with_description) == 1
     assert itau.save(db, job) == 1  # listing only: no description this time
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT descripcion FROM ofertas_itau").fetchone()[0] == "Manejo de SQL Server."
+        descripcion = conn.execute("SELECT descripcion FROM ofertas WHERE fuente = 'itau'").fetchone()[0]
+        assert descripcion == "Manejo de SQL Server."
+
+
+def test_migrar_conserva_tabla_y_no_sobrescribe_oferta_mas_reciente(tmp_path):
+    bd = tmp_path / "anterior.sqlite3"
+    with sqlite3.connect(bd) as db:
+        db.execute("""CREATE TABLE ofertas_itau (
+            id TEXT PRIMARY KEY, titulo TEXT NOT NULL, url TEXT NOT NULL,
+            ubicacion TEXT, fecha TEXT, descripcion TEXT
+        )""")
+        enlace = "https://trabajaenitau.cl/job/Analista/1/"
+        db.execute("INSERT INTO ofertas_itau VALUES (?, ?, ?, ?, ?, ?)",
+                   ("1", "Analista", enlace, "Santiago", "20 nov 2026", "Python"))
+    assert itau.migrar(bd) == 1
+    assert itau.migrar(bd) == 0
+    with sqlite3.connect(bd) as db:
+        assert db.execute("SELECT cargo, descripcion, estado FROM ofertas").fetchone() == (
+            "Analista", "Python", "completa",
+        )
+        db.execute("UPDATE ofertas SET cargo = 'Analista sénior', descripcion = 'Python y SQL'")
+    assert itau.migrar(bd) == 0
+    with sqlite3.connect(bd) as db:
+        actual = db.execute("SELECT cargo, descripcion FROM ofertas").fetchone()
+        assert actual == ("Analista sénior", "Python y SQL")
+        assert db.execute("SELECT titulo FROM ofertas_itau").fetchone() == ("Analista",)
+
+
+@pytest.mark.parametrize("tabla", [False, True])
+def test_migrar_vacia(tmp_path, tabla):
+    bd = tmp_path / "anterior.sqlite3"
+    if tabla:
+        with sqlite3.connect(bd) as db:
+            db.execute("CREATE TABLE ofertas_itau (id, titulo, url, ubicacion, fecha, descripcion)")
+    assert itau.migrar(bd) == 0
+    with sqlite3.connect(bd) as db:
+        assert db.execute("SELECT COUNT(*) FROM ofertas").fetchone()[0] == 0
