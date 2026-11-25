@@ -1,5 +1,6 @@
 """Candidaturas locales, huella de revisión e historial de estados."""
 
+import argparse
 import hashlib
 import json
 import sqlite3
@@ -194,35 +195,76 @@ def actualizar_contenido(
     """Guarda el contenido y, si cambia su huella, vuelve a revisión."""
     with closing(_conectar(database)) as db, db:
         db.execute("BEGIN IMMEDIATE")
+        _actualizar_contenido(db, candidatura_id, destino, cargo, archivo, respuestas, decision_id)
+
+
+def _actualizar_contenido(
+    db: sqlite3.Connection,
+    candidatura_id: int,
+    destino: str | None = None,
+    cargo: str | None = None,
+    archivo: str | Path | None = None,
+    respuestas: dict[str, str] | None = None,
+    decision_id: int | None = None,
+) -> None:
+    fila = _fila(db, candidatura_id)
+    if fila["estado"] in {"enviado", "por_verificar"}:
+        raise ValueError(f"No se puede editar una candidatura en estado {fila['estado']}.")
+    pdf = Path(fila["archivo"]) if archivo is None else Path(archivo).resolve()
+    pdf_sha256 = _sha256_pdf(pdf)
+    cv_version = fila["cv_version"]
+    if decision_id is not None:
+        cv_version = _decision(db, decision_id, pdf, pdf_sha256)["cv_elegido"]
+    else:
+        decision_id = fila["decision_id"]
+        if str(pdf) != fila["archivo"]:
+            raise ValueError("Indica la decisión de CV para el nuevo archivo.")
+    destino = fila["destino"] if destino is None else destino
+    cargo = fila["cargo"] if cargo is None else cargo
+    respuestas_actuales = json.loads(fila["respuestas"]) if respuestas is None else respuestas
+    nueva_huella = huella(destino, cargo, pdf_sha256, respuestas_actuales)
+    db.execute("""
+        UPDATE candidaturas
+        SET destino = ?, cargo = ?, archivo = ?, pdf_sha256 = ?, respuestas = ?, huella = ?,
+            decision_id = ?, cv_version = ?
+        WHERE id = ?
+    """, (
+        destino, cargo, str(pdf), pdf_sha256, _json_canonico(respuestas_actuales), nueva_huella,
+        decision_id, cv_version, candidatura_id,
+    ))
+    cambio = nueva_huella != fila["huella"] or cv_version != fila["cv_version"]
+    if cambio and fila["estado"] in {"listo", "aprobado"}:
+        _registrar_transicion(
+            db, _fila(db, candidatura_id), "listo", motivo="Cambio de contenido",
+        )
+
+
+def elegir_cv(
+    database: str | Path, candidatura_id: int, version: str, archivo: Path, huella_vista: str,
+) -> None:
+    """Registra la elección y modifica la candidatura en la misma transacción."""
+    pdf = archivo.read_bytes()
+    if not pdf.startswith(b"%PDF-"):
+        raise ValueError("La versión no apunta a un PDF válido.")
+    sha256 = hashlib.sha256(pdf).hexdigest()
+    with closing(_conectar(database)) as db, db:
+        db.execute("BEGIN IMMEDIATE")
         fila = _fila(db, candidatura_id)
-        if fila["estado"] in {"enviado", "por_verificar"}:
-            raise ValueError(f"No se puede editar una candidatura en estado {fila['estado']}.")
-        pdf = Path(fila["archivo"]) if archivo is None else Path(archivo).resolve()
-        pdf_sha256 = _sha256_pdf(pdf)
-        cv_version = fila["cv_version"]
-        if decision_id is not None:
-            cv_version = _decision(db, decision_id, pdf, pdf_sha256)["cv_elegido"]
-        else:
-            decision_id = fila["decision_id"]
-            if str(pdf) != fila["archivo"]:
-                raise ValueError("Indica la decisión de CV para el nuevo archivo.")
-        destino = fila["destino"] if destino is None else destino
-        cargo = fila["cargo"] if cargo is None else cargo
-        respuestas_actuales = json.loads(fila["respuestas"]) if respuestas is None else respuestas
-        nueva_huella = huella(destino, cargo, pdf_sha256, respuestas_actuales)
-        db.execute("""
-            UPDATE candidaturas
-            SET destino = ?, cargo = ?, archivo = ?, pdf_sha256 = ?, respuestas = ?, huella = ?,
-                decision_id = ?, cv_version = ?
-            WHERE id = ?
-        """, (
-            destino, cargo, str(pdf), pdf_sha256, _json_canonico(respuestas_actuales), nueva_huella,
-            decision_id, cv_version, candidatura_id,
-        ))
-        if nueva_huella != fila["huella"] and fila["estado"] in {"listo", "aprobado"}:
-            _registrar_transicion(
-                db, _fila(db, candidatura_id), "listo", motivo="Cambio de contenido",
-            )
+        if fila["huella"] != huella_vista:
+            raise ValueError("El contenido cambió, revisa de nuevo.")
+        if fila["estado"] not in {"listo", "aprobado"}:
+            raise ValueError("La candidatura debe estar lista o aprobada para cambiar su CV.")
+        if (version, str(archivo), sha256) == (fila["cv_version"], fila["archivo"], fila["pdf_sha256"]):
+            return
+        nueva = db.execute("""
+            INSERT INTO decisiones
+                (modo, oferta, requisitos, cv_recomendado, cv_elegido, archivo, sha256, motivo)
+            SELECT modo, oferta, requisitos, cv_recomendado, ?, ?, ?, ?
+            FROM decisiones WHERE id = ?
+        """, (version, archivo.name, sha256, "Elección desde la vista", fila["decision_id"]))
+        if nueva.rowcount != 1 or nueva.lastrowid is None:
+            raise ValueError("No existe la decisión de CV anterior.")
+        _actualizar_contenido(db, candidatura_id, archivo=archivo, decision_id=nueva.lastrowid)
 
 
 def cambiar_estado(
@@ -276,3 +318,78 @@ def marcar_envio(
         database, candidatura_id, estados[resultado],
         motivo=f"Resultado de envío: {resultado}", comprobante=comprobante,
     )
+
+
+def historial(database: str | Path, candidatura_id: int) -> list[dict]:
+    with closing(_conectar(database)) as db:
+        _fila(db, candidatura_id)
+        eventos = db.execute("""
+            SELECT estado_anterior, estado_nuevo, fecha, huella, motivo
+            FROM candidatura_eventos WHERE candidatura_id = ? ORDER BY id
+        """, (candidatura_id,))
+        return [dict(evento) for evento in eventos]
+
+
+def _leer_respuestas(archivo: Path) -> dict[str, str]:
+    respuestas = json.loads(archivo.read_text(encoding="utf-8"))
+    if not isinstance(respuestas, dict) or any(not isinstance(valor, str) for valor in respuestas.values()):
+        raise ValueError("Las respuestas deben ser un objeto JSON con valores de texto.")
+    return respuestas
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Prepara y revisa candidaturas guardadas en SQLite.")
+    parser.add_argument("--bd", type=Path, default=Path("postulaciones.sqlite3"))
+    comandos = parser.add_subparsers(dest="comando", required=True)
+    nuevo = comandos.add_parser("crear", help="Crea un borrador con una oferta y un CV registrados.")
+    nuevo.add_argument("oferta", metavar="FUENTE:ID")
+    nuevo.add_argument("decision", type=int)
+    nuevo.add_argument("pdf", type=Path)
+
+    for comando, ayuda in (
+        ("responder", "Reemplaza las respuestas con las de un archivo JSON."),
+        ("listo", "Marca el borrador como listo para revisar."),
+        ("mostrar", "Muestra el contenido, las respuestas pendientes y la huella."),
+        ("aprobar", "Aprueba la huella que revisaste."),
+        ("enviado", "Registra la confirmación de un envío previo."),
+        ("incierto", "Registra un envío sin confirmación."),
+        ("no-enviado", "Confirma que el envío incierto no se realizó."),
+        ("historial", "Muestra los cambios de estado en orden."),
+    ):
+        subcomando = comandos.add_parser(comando, help=ayuda)
+        subcomando.add_argument("id", type=int)
+        if comando == "responder":
+            subcomando.add_argument("respuestas", type=Path, metavar="RESPUESTAS_JSON")
+        elif comando == "aprobar":
+            subcomando.add_argument("huella")
+        elif comando == "enviado":
+            subcomando.add_argument("--comprobante")
+
+    args = parser.parse_args()
+    try:
+        if args.comando == "crear":
+            fuente, _, id_origen = args.oferta.partition(":")
+            if not fuente or not id_origen:
+                raise ValueError("Indica la oferta como FUENTE:ID.")
+            print(crear(args.bd, fuente, id_origen, args.decision, args.pdf))
+        elif args.comando == "responder":
+            actualizar_contenido(args.bd, args.id, respuestas=_leer_respuestas(args.respuestas))
+        elif args.comando == "listo":
+            cambiar_estado(args.bd, args.id, "listo")
+        elif args.comando == "mostrar":
+            print(json.dumps(leer(args.bd, args.id), ensure_ascii=False, indent=2))
+        elif args.comando == "aprobar":
+            aprobar(args.bd, args.id, args.huella)
+        elif args.comando == "historial":
+            print(json.dumps(historial(args.bd, args.id), ensure_ascii=False, indent=2))
+        else:
+            marcar_envio(
+                args.bd, args.id, args.comando.replace("-", "_"),
+                comprobante=getattr(args, "comprobante", None),
+            )
+    except (OSError, ValueError, sqlite3.Error) as error:
+        parser.exit(1, f"Error: {error}\n")
+
+
+if __name__ == "__main__":
+    main()
