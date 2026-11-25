@@ -149,17 +149,47 @@ def relacionadas(db, remitente, texto):
     """Candidaturas cuya empresa calza por dominio del remitente o por nombre en el texto."""
     dominio = remitente.rpartition("@")[2].lower()
     plano = reglas.normalizar(texto)
-    ids = []
+    filas = []
     for fila in db.execute("""
-        SELECT c.id, c.fuente, o.empresa FROM candidaturas c
+        SELECT c.id, c.fuente, c.id_origen, c.cargo, o.empresa FROM candidaturas c
         JOIN ofertas o ON o.fuente = c.fuente AND o.id_origen = c.id_origen ORDER BY c.id
     """):
         por_dominio = any(dominio == d or dominio.endswith("." + d) for d in DOMINIOS.get(fila["fuente"], ()))
-        empresa = reglas.normalizar(fila["empresa"])
-        por_nombre = bool(empresa) and re.search(rf"\b{re.escape(empresa)}\b", plano) is not None
-        if por_dominio or por_nombre:
-            ids.append(fila["id"])
-    return ids
+        if por_dominio or _contiene(plano, fila["empresa"]):
+            filas.append(fila)
+    return filas
+
+
+def _contiene(plano, valor):
+    valor = reglas.normalizar(str(valor or "")).strip()
+    return bool(valor) and re.search(rf"\b{re.escape(valor)}\b", plano) is not None
+
+
+def asociar(filas, texto):
+    """Asocia solo si una única candidatura de la empresa calza además por cargo o ID de origen."""
+    plano = reglas.normalizar(texto)
+    calzan = [f["id"] for f in filas if _contiene(plano, f["cargo"]) or _contiene(plano, f["id_origen"])]
+    if len(calzan) == 1:
+        return calzan[0], calzan
+    return None, calzan or [f["id"] for f in filas]
+
+
+def _reenvio(asunto, cuerpo):
+    """En un reenvío, remitente y fecha originales desde el cuerpo; None si no es reenvío."""
+    if not re.match(r"\s*(rv|fw|fwd|reenviado)\s*:", asunto, re.IGNORECASE):
+        return None
+    remitente = fecha = None
+    for linea in cuerpo.splitlines():
+        clave, _, valor = linea.partition(":")
+        clave = reglas.normalizar(clave.strip())
+        if remitente is None and clave in {"de", "from"} and "@" in valor:
+            remitente = parseaddr(valor.strip())[1].lower()
+        elif fecha is None and clave in {"fecha", "date", "enviado", "sent"}:
+            try:
+                fecha = parsedate_to_datetime(valor.strip()).isoformat()
+            except (TypeError, ValueError):
+                pass
+    return remitente, fecha
 
 
 def importar(bd, ruta):
@@ -173,18 +203,72 @@ def importar(bd, ruta):
             mensaje = BytesParser(policy=policy.default).parsebytes(datos)
             asunto = " ".join(str(mensaje["subject"] or "").split())
             remitente = parseaddr(str(mensaje["from"] or ""))[1].lower()
+            fecha = _fecha(mensaje)
             cuerpo = _cuerpo(mensaje)
-            ids = relacionadas(db, remitente, f"{asunto}\n{cuerpo}")
-            if not ids:
+            original = _reenvio(asunto, cuerpo)
+            if original:
+                remitente, fecha = original[0] or remitente, original[1] or fecha
+            texto = f"{asunto}\n{cuerpo}"
+            filas = relacionadas(db, remitente, texto)
+            if not filas:
                 resumen["ignorados"] += 1
                 continue
             clase, cita = clasificar(asunto, cuerpo)
+            candidatura, candidatas = asociar(filas, texto)
+            if original is not None and None in original:
+                candidatura = None  # reenvío sin remitente o fecha originales: lo revisa la persona
             db.execute("""
-                INSERT INTO correo_eventos (huella, candidatas, clase, cita, fecha, remitente, asunto, estado)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'por_revisar')
-            """, (huella, json.dumps(ids), clase, cita, _fecha(mensaje), remitente, asunto))
+                INSERT INTO correo_eventos (huella, candidatura_id, candidatas, clase, cita, fecha, remitente,
+                                            asunto, estado)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (huella, candidatura, json.dumps(candidatas), clase, cita, fecha, remitente, asunto,
+                  "asociado" if candidatura else "por_revisar"))
             resumen["importados"] += 1
     return resumen
+
+
+def pendientes(bd):
+    with closing(_conectar(bd)) as db:
+        filas = db.execute("SELECT * FROM correo_eventos WHERE estado <> 'confirmado' ORDER BY id").fetchall()
+    return [dict(fila) for fila in filas]
+
+
+def pendientes_texto(bd):
+    lineas = []
+    for evento in pendientes(bd):
+        lineas.append(f"Evento {evento['id']} · {evento['clase']} · {evento['fecha'] or 'sin fecha'} · "
+                      f"{evento['remitente']} · «{evento['cita'] or evento['asunto']}»")
+        if evento["candidatura_id"]:
+            accion = "marcar como enviada" if evento["clase"] == "confirmacion" else "registrar el correo"
+            lineas.append(f"  Candidatura {evento['candidatura_id']}: propuesta {accion} → "
+                          f"python -m asistente.correo confirmar {evento['id']}")
+        else:
+            ids = ", ".join(map(str, json.loads(evento["candidatas"])))
+            lineas.append(f"  Por revisar; candidatas {ids} → "
+                          f"python -m asistente.correo confirmar {evento['id']} --candidatura <id>")
+    return "\n".join(lineas) if lineas else "Sin correos por revisar."
+
+
+def confirmar(bd, evento_id, candidatura=None):
+    """Aplica lo que propone un correo, solo por orden de la persona. Una confirmación marca el envío."""
+    with closing(_conectar(bd)) as db:
+        evento = db.execute("SELECT * FROM correo_eventos WHERE id = ?", (evento_id,)).fetchone()
+    if evento is None:
+        raise ValueError("No existe el evento de correo indicado.")
+    if evento["estado"] == "confirmado":
+        raise ValueError("El evento ya fue confirmado.")
+    elegida = candidatura or evento["candidatura_id"]
+    if elegida is None:
+        raise ValueError("El correo está por revisar: indica la candidatura con --candidatura <id>.")
+    if elegida not in json.loads(evento["candidatas"]):
+        raise ValueError(f"La candidatura {elegida} no es candidata para este correo.")
+    if evento["clase"] == "confirmacion" and candidaturas.leer(bd, elegida)["estado"] != "enviado":
+        comprobante = (f"correo {evento['huella']} · {evento['fecha']} · {evento['remitente']} · "
+                       f"«{evento['cita']}»")
+        candidaturas.marcar_envio(bd, elegida, "enviado", comprobante=comprobante)
+    with closing(_conectar(bd)) as db, db:
+        db.execute("UPDATE correo_eventos SET candidatura_id = ?, estado = 'confirmado' WHERE id = ?",
+                   (elegida, evento_id))
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -193,13 +277,23 @@ def main(argv: list[str] | None = None) -> None:
     sub = parser.add_subparsers(dest="comando", required=True)
     importar_cmd = sub.add_parser("importar", help="Importa un archivo .eml, .mbox o una carpeta.")
     importar_cmd.add_argument("ruta", type=Path)
+    sub.add_parser("pendientes", help="Muestra los correos sin confirmar y lo que proponen.")
+    confirmar_cmd = sub.add_parser("confirmar", help="Aplica lo que propone un correo.")
+    confirmar_cmd.add_argument("evento", type=int)
+    confirmar_cmd.add_argument("--candidatura", type=int, help="Candidatura elegida si está por revisar.")
     args = parser.parse_args(argv)
     try:
-        resumen = importar(args.bd, args.ruta)
+        if args.comando == "importar":
+            resumen = importar(args.bd, args.ruta)
+            print(f"Importados: {resumen['importados']} · repetidos: {resumen['repetidos']} · "
+                  f"sin candidatura relacionada (no se guardan): {resumen['ignorados']}")
+        elif args.comando == "pendientes":
+            print(pendientes_texto(args.bd))
+        else:
+            confirmar(args.bd, args.evento, args.candidatura)
+            print(f"Evento {args.evento} confirmado.")
     except (OSError, ValueError, sqlite3.Error) as error:
         parser.exit(1, f"Error: {error}\n")
-    print(f"Importados: {resumen['importados']} · repetidos: {resumen['repetidos']} · "
-          f"sin candidatura relacionada (no se guardan): {resumen['ignorados']}")
 
 
 if __name__ == "__main__":

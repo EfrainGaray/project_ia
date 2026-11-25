@@ -5,7 +5,7 @@ del `check:` en la PR.
 
 - [x] T001 Lectura de `.eml`/`.mbox`, clasificación con cita y datos mínimos — files: asistente/correo.py,
   tests/test_correo.py, tests/fixtures/correo/* — check: AC4, AC5, AC6, AC7
-- [ ] T002 Asociación con candidaturas, «por revisar» y `confirmar` — files: asistente/correo.py, tests/test_correo.py —
+- [x] T002 Asociación con candidaturas, «por revisar» y `confirmar` — files: asistente/correo.py, tests/test_correo.py —
   check: AC1, AC2, AC3
 - [ ] T003 Prueba con correos reales de Ayelén (en su máquina) y documentación — files: specs/008-seguimiento-correo/spec.md,
   README.md, REQUERIMIENTOS.md — check: AC8
