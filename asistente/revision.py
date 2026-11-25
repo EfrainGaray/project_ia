@@ -2,7 +2,9 @@
 
 import argparse
 import hashlib
+import hmac
 import json
+import secrets
 import sqlite3
 from contextlib import closing
 from html import escape
@@ -29,6 +31,7 @@ class ServidorRevision(ThreadingHTTPServer):
         }
         self.evidencias: dict[str, str] = datos["evidencias"]
         self.bd = bd
+        self.token = secrets.token_urlsafe(32)
         super().__init__(("127.0.0.1", puerto), VistaRevision)
 
 
@@ -83,6 +86,57 @@ class VistaRevision(BaseHTTPRequestHandler):
         except sqlite3.Error:
             self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR)
 
+    def do_POST(self) -> None:
+        if not self._host_local():
+            return
+        partes = urlsplit(self.path).path.split("/")
+        if len(partes) != 4 or partes[1] != "candidatura" or partes[3] != "aprobar":
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        try:
+            identificador = int(partes[2])
+            largo = int(self.headers.get("Content-Length", "0"))
+            tipo = self.headers.get_content_type()
+            if not 0 < largo <= 4096 or tipo != "application/x-www-form-urlencoded":
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            campos = parse_qs(self.rfile.read(largo).decode("utf-8"), max_num_fields=8)
+        except ValueError:
+            self.send_error(HTTPStatus.BAD_REQUEST)
+            return
+        token = campos.get("token", [])
+        if len(token) != 1 or not hmac.compare_digest(token[0].encode(), self.server.token.encode()):
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return
+        try:
+            self._aprobar(identificador, campos.get("huella", [""])[0])
+        except (ValueError, OSError):
+            self.send_error(HTTPStatus.NOT_FOUND)
+        except sqlite3.Error:
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def _aprobar(self, identificador: int, huella_vista: str) -> None:
+        fila = candidaturas.leer(self.server.bd, identificador)
+        if huella_vista != fila["huella"]:
+            self._detalle(identificador, HTTPStatus.CONFLICT, "El contenido cambió, revisa de nuevo.")
+            return
+        if fila["estado"] != "aprobado":
+            try:
+                self._pdf(fila["cv_version"], {"id": [str(identificador)], "huella": [huella_vista]})
+                candidaturas.cambiar_estado(
+                    self.server.bd, identificador, "aprobado", huella_vista=huella_vista, motivo="vista",
+                )
+            except (ValueError, OSError) as error:
+                actual = candidaturas.leer(self.server.bd, identificador)
+                if actual["huella"] != huella_vista:
+                    self._detalle(identificador, HTTPStatus.CONFLICT, "El contenido cambió, revisa de nuevo.")
+                    return
+                if actual["estado"] != "aprobado":
+                    aviso = "El PDF no está disponible." if isinstance(error, OSError) else str(error)
+                    self._detalle(identificador, HTTPStatus.CONFLICT, aviso)
+                    return
+        self._detalle(identificador)
+
     def _lista(self) -> None:
         with closing(candidaturas._conectar(self.server.bd)) as db:
             filas = db.execute("SELECT id, cargo, estado FROM candidaturas ORDER BY id DESC").fetchall()
@@ -111,7 +165,9 @@ class VistaRevision(BaseHTTPRequestHandler):
                 raise ValueError("El PDF ya no coincide con la candidatura")
         return pdf
 
-    def _detalle(self, identificador: int) -> None:
+    def _detalle(
+        self, identificador: int, codigo: HTTPStatus = HTTPStatus.OK, aviso: str = "",
+    ) -> None:
         fila = candidaturas.leer(self.server.bd, identificador)
         with closing(candidaturas._conectar(self.server.bd)) as db:
             oferta = db.execute(
@@ -132,22 +188,33 @@ class VistaRevision(BaseHTTPRequestHandler):
             for campo, valor in fila["respuestas"].items()
         )
         consulta = {"id": [str(identificador)], "huella": [fila["huella"]]}
+        pdf_disponible = False
         try:
             self._pdf(fila["cv_version"], consulta)
+            pdf_disponible = True
             ruta = f'/pdf/{quote(fila["cv_version"], safe="")}?{urlencode(consulta, doseq=True)}'
             pdf = f'<embed src="{_texto(ruta)}" type="application/pdf" title="Vista previa del CV">'
         except (OSError, ValueError):
             pdf = "<p>El PDF guardado falta o cambió. Actualiza la candidatura antes de aprobar.</p>"
         sin_descripcion = "<p>Oferta pendiente de descripción.</p>" if not oferta["descripcion"] else ""
+        aprobacion = ""
+        if fila["estado"] == "listo":
+            deshabilitado = " disabled" if fila["pendientes"] or not pdf_disponible else ""
+            aprobacion = f"""
+<form method="post" action="/candidatura/{identificador}/aprobar">
+<input type="hidden" name="token" value="{self.server.token}">
+<input type="hidden" name="huella" value="{_texto(fila["huella"])}">
+<button{deshabilitado}>Aprobar</button></form>"""
+        mensaje = f'<p role="alert">{_texto(aviso)}</p>' if aviso else ""
         self._pagina(fila["cargo"], f"""
 <p><a href="/">Candidaturas</a></p><h1>{_texto(fila["cargo"])}</h1>
-<p>{_texto(oferta["empresa"])} · {_texto(fila["estado"])}</p>
+{mensaje}<p>{_texto(oferta["empresa"])} · {_texto(fila["estado"])}</p>
 <p>Oferta: {_texto(oferta["enlace"])}</p>{sin_descripcion}
 <p>Destino: {_texto(fila["destino"])}</p>
 <h2>Requisitos</h2><ul>{requisitos}</ul>
 <h2>CV</h2><p>{_texto(Path(fila["archivo"]).name)}</p>{pdf}
 <h2>Respuestas</h2><ul>{respuestas}</ul>
-<p>Huella <code>{_texto(fila["huella"])}</code></p>""")
+<p>Huella <code>{_texto(fila["huella"])}</code></p>{aprobacion}""", codigo)
 
 
 def main() -> None:

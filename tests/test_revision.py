@@ -1,6 +1,8 @@
+import re
 from pathlib import Path
 from threading import Thread
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import pytest
@@ -63,3 +65,60 @@ def test_host_no_local_rechazado(vista):
     with pytest.raises(HTTPError) as error:
         urlopen(Request(base, headers={"Host": "ejemplo.com"}))
     assert error.value.code == 403
+
+
+def _formulario(base, identificador):
+    with urlopen(f"{base}/candidatura/{identificador}") as respuesta:
+        html = respuesta.read().decode()
+    return html, dict(re.findall(r'name="(token|huella)" value="([^"]+)"', html))
+
+
+def _post(base, identificador, accion, campos):
+    return urlopen(f"{base}/candidatura/{identificador}/{accion}", urlencode(campos).encode())
+
+
+def test_aprobar_huella_actual_y_repetir(vista):
+    bd, identificador, base = vista
+    _, campos = _formulario(base, identificador)
+    for _ in range(2):
+        with _post(base, identificador, "aprobar", campos) as respuesta:
+            assert "aprobado" in respuesta.read().decode()
+    assert [evento["motivo"] for evento in candidaturas.historial(bd, identificador)].count("vista") == 1
+
+
+def test_huella_vieja_muestra_contenido_actual(vista):
+    bd, identificador, base = vista
+    _, campos = _formulario(base, identificador)
+    candidaturas.actualizar_contenido(bd, identificador, respuestas={"motivación": "Respuesta nueva"})
+    with pytest.raises(HTTPError) as error:
+        _post(base, identificador, "aprobar", campos)
+    assert error.value.code == 409
+    html = error.value.read().decode()
+    assert "El contenido cambió" in html
+    assert "Respuesta nueva" in html
+    assert candidaturas.leer(bd, identificador)["estado"] == "listo"
+
+
+@pytest.mark.parametrize("token", ["", "inválido"])
+def test_token_requerido(vista, token):
+    bd, identificador, base = vista
+    _, campos = _formulario(base, identificador)
+    if token:
+        campos["token"] = token
+    else:
+        campos.pop("token", None)
+    with pytest.raises(HTTPError) as error:
+        _post(base, identificador, "aprobar", campos)
+    assert error.value.code == 403
+    assert candidaturas.leer(bd, identificador)["estado"] == "listo"
+
+
+def test_pendiente_bloquea_aprobacion(vista):
+    bd, identificador, base = vista
+    candidaturas.actualizar_contenido(bd, identificador, respuestas={"motivación": "{pendiente}"})
+    html, campos = _formulario(base, identificador)
+    assert "<button disabled>Aprobar</button>" in html
+    with pytest.raises(HTTPError) as error:
+        _post(base, identificador, "aprobar", campos)
+    assert error.value.code == 409
+    assert candidaturas.leer(bd, identificador)["estado"] == "listo"
