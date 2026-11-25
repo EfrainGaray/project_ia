@@ -85,8 +85,9 @@ importarlas localmente. Para incluir una descripción, guarda la ficha en
 python3 itau.py --html privado/search.html --fichas privado/fichas
 ```
 
-La tabla `ofertas_itau` guarda título, enlace, ubicación, fecha y, cuando está
-disponible, descripción. El identificador numérico evita duplicados al volver
+La tabla común `ofertas` guarda título, enlace, ubicación, fecha y, cuando está
+disponible, descripción. Los registros de `ofertas_itau` se copian sin borrar la
+tabla histórica. Para migrar sin consultar el portal, usa `python3 itau.py --solo-migrar`. El identificador numérico evita duplicados al volver
 a importar. El lector funciona sin un modelo y prepara los datos para
 conectarlos al recomendador.
 
