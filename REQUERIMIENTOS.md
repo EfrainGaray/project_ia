@@ -23,6 +23,8 @@
 
 ## Estado actual
 
+- La vista local muestra la oferta, la evidencia, las respuestas y el PDF guardado. Permite elegir otro CV y aprobar la huella revisada desde el navegador.
+
 - La CLI de candidaturas permite preparar y revisar una oferta guardada, aprobar el contenido exacto y registrar en SQLite el resultado observado de un envío. Ver el recorrido en `README.md`.
 
 - `app.py` calcula una recomendación, registra la elección en SQLite y guarda la huella del PDF. El ejemplo de Itaú usa una referencia manual y un perfil ficticio. La ruta opcional a OpenAI se probó con una respuesta simulada; falta validarla con un modelo real.
