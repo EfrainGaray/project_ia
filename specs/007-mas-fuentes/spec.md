@@ -72,6 +72,12 @@ See plan.md → Approach. Changing it requires a Change log line here.
   antes de 2026-11-24). El reconocimiento de cada fuente se anota aquí al tomar su tarea, con este formato:
   `- <fuente> (AAAA-MM-DD): URL · robots.txt · términos · listado/ficha sin navegador sí/no · método elegido · motivo`.
 
+- Itaú (2026-11-24, Chile). `https://trabajaenitau.cl/search` respondió HTTP 403 desde el entorno de trabajo.
+  `robots.txt` respondió HTTP 200 y no excluye `/search` ni las fichas públicas. El rechazo impidió revisar los
+  términos desde el listado y se detuvo la consulta de fichas. Se mantiene la importación de HTML guardado,
+  verificada con copias de prueba del listado y de una ficha. El método directo queda registrado como no accesible
+  desde este entorno.
+
 ## Change log
 
 ## Verify

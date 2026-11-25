@@ -13,20 +13,14 @@ from urllib.robotparser import RobotFileParser
 
 from bs4 import BeautifulSoup
 
+from asistente import ofertas
+
 HOST = "trabajaenitau.cl"
 SEARCH = f"https://{HOST}/search"
 AGENT = "AsistentePostulaciones"
 JOB_PATH = re.compile(r"/job/(?:[^/]+/)*([0-9]+)/?")
-UPSERT = """
-    INSERT INTO ofertas_itau (id, titulo, url, ubicacion, fecha, descripcion)
-    VALUES (:id, :titulo, :url, :ubicacion, :fecha, :descripcion)
-    ON CONFLICT(id) DO UPDATE SET
-        titulo = excluded.titulo,
-        url = excluded.url,
-        ubicacion = COALESCE(excluded.ubicacion, ofertas_itau.ubicacion),
-        fecha = COALESCE(excluded.fecha, ofertas_itau.fecha),
-        descripcion = COALESCE(excluded.descripcion, ofertas_itau.descripcion)
-"""
+FUENTE = "itau"
+EMPRESA = "Itaú"
 
 
 def public_url(url):
@@ -67,7 +61,8 @@ class Portal:
                     raise ValueError("La página supera el tamaño esperado.")
                 return body.decode(response.headers.get_content_charset() or "utf-8")
         except HTTPError as error:
-            raise ValueError(f"Itaú devolvió HTTP {error.code} para {url}.") from error
+            motivo = f"Itaú devolvió HTTP {error.code} para {url}."
+            raise ofertas.FalloFuente(motivo, url, error.code) from error
 
 
 def parse_search(html):
@@ -115,16 +110,38 @@ def parse_detail(html):
     return description.get_text("\n", strip=True)
 
 
-def save(database, jobs):
-    with closing(sqlite3.connect(database)) as db, db:
+def migrar(database):
+    """Copia los registros históricos que todavía no están en la tabla común."""
+    with closing(ofertas.conectar(database)) as db, db:
+        tabla = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ofertas_itau'"
+        ).fetchone()
+        if tabla is None:
+            return 0
+        ahora = ofertas.ahora()
         db.execute("""
-            CREATE TABLE IF NOT EXISTS ofertas_itau (
-                id TEXT PRIMARY KEY, titulo TEXT NOT NULL, url TEXT NOT NULL,
-                ubicacion TEXT, fecha TEXT, descripcion TEXT
+            INSERT INTO ofertas (
+                fuente, id_origen, empresa, cargo, ubicacion, fecha_publicacion,
+                fecha_deteccion, fecha_actualizacion, enlace, descripcion, estado
             )
-        """)
-        db.executemany(UPSERT, jobs)
-        return db.execute("SELECT COUNT(*) FROM ofertas_itau").fetchone()[0]
+            SELECT ?, id, ?, titulo, ubicacion, fecha, ?, ?, url,
+                   CASE WHEN TRIM(descripcion) <> '' THEN descripcion END,
+                   CASE WHEN TRIM(descripcion) <> '' THEN ? ELSE ? END
+            FROM ofertas_itau WHERE id IS NOT NULL
+            ON CONFLICT(fuente, id_origen) DO NOTHING
+        """, (FUENTE, EMPRESA, ahora, ahora, ofertas.COMPLETA, ofertas.PENDIENTE))
+        return db.execute("SELECT changes()").fetchone()[0]
+
+
+def save(database, jobs):
+    migrar(database)
+    ofertas.guardar(database, ({
+        "fuente": FUENTE, "empresa": EMPRESA, "id_origen": job["id"], "cargo": job["titulo"],
+        "enlace": job["url"], "ubicacion": job.get("ubicacion"), "fecha_publicacion": job.get("fecha"),
+        "descripcion": job.get("descripcion"),
+    } for job in jobs))
+    with closing(ofertas.conectar(database)) as db:
+        return db.execute("SELECT COUNT(*) FROM ofertas WHERE fuente = ?", (FUENTE,)).fetchone()[0]
 
 
 def main():
@@ -135,10 +152,17 @@ def main():
     parser.add_argument("--paginas", type=int, default=2, choices=range(1, 6))
     parser.add_argument("--detalles", type=int, default=0, choices=range(0, 11),
                         help="Máximo de fichas en vivo que se consultarán.")
+    parser.add_argument("--solo-migrar", action="store_true",
+                        help="Copia ofertas históricas sin consultar el portal.")
     args = parser.parse_args()
     if args.html and args.detalles:
         parser.error("Para HTML guardado, usa --fichas en lugar de --detalles.")
+    url = SEARCH
     try:
+        migradas = migrar(args.bd)
+        if args.solo_migrar:
+            print(f"Ofertas históricas copiadas: {migradas}")
+            return
         jobs: dict[str, dict] = {}
         if args.html:
             for path in args.html:
@@ -156,14 +180,23 @@ def main():
                 pending.extend(link for link in dict.fromkeys(links)
                                if link not in visited and link not in pending)
             for job in list(jobs.values())[:args.detalles]:
-                job["descripcion"] = parse_detail(portal.fetch(job["url"]))
+                url = job["url"]
+                job["descripcion"] = parse_detail(portal.fetch(url))
         if args.fichas:
             for job in jobs.values():
                 path = args.fichas / f"{job['id']}.html"
                 if path.is_file():
                     job["descripcion"] = parse_detail(path.read_text(encoding="utf-8-sig"))
         total = save(args.bd, jobs.values())
-    except (OSError, URLError, ValueError, sqlite3.Error) as error:
+    except (ofertas.FalloFuente, OSError, URLError, ValueError) as error:
+        if not args.html and not args.solo_migrar:
+            fallo = error if isinstance(error, ofertas.FalloFuente) else ofertas.FalloFuente(str(error), url)
+            try:
+                ofertas.registrar_fallo(args.bd, FUENTE, fallo)
+            except sqlite3.Error as registro:
+                parser.exit(1, f"Error: {error} (fallo al registrar: {registro})\n")
+        parser.exit(1, f"Error: {error}\n")
+    except sqlite3.Error as error:
         parser.exit(1, f"Error: {error}\n")
     for job in jobs.values():
         print(f"{job['id']} · {job['titulo']} · {job['url']}")
